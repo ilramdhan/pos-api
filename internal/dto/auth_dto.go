@@ -12,7 +12,10 @@ type RegisterRequest struct {
 	Password        string `json:"password" validate:"required,min=8"`
 	ConfirmPassword string `json:"confirmPassword" validate:"omitempty"`
 	Name            string `json:"name" validate:"required,min=2,max=100"`
+	BusinessName    string `json:"businessName" validate:"omitempty"`
+	LicenseKey      string `json:"licenseKey" validate:"omitempty"`
 	Role            string `json:"role" validate:"omitempty,oneof=admin manager cashier"`
+	AgreeToTerms    bool   `json:"agreeToTerms" validate:"omitempty"`
 }
 
 // RefreshTokenRequest represents a token refresh request
