@@ -120,12 +120,16 @@ func New(cfg *config.Config, db *database.Database) *Router {
 				users.PUT("/:id/reset-password", userHandler.ResetPassword)
 			}
 
-			// Notifications
+			// Notifications (supports both PUT and PATCH/POST for FE compatibility)
 			notifications := protected.Group("/notifications")
 			{
 				notifications.GET("", notificationHandler.GetNotifications)
+				// Mark single as read (PUT or PATCH)
 				notifications.PUT("/:id/read", notificationHandler.MarkAsRead)
+				notifications.PATCH("/:id/read", notificationHandler.MarkAsRead)
+				// Mark all as read (PUT or POST)
 				notifications.PUT("/read-all", notificationHandler.MarkAllAsRead)
+				notifications.POST("/read-all", notificationHandler.MarkAllAsRead)
 				notifications.DELETE("/:id", notificationHandler.DeleteNotification)
 			}
 
