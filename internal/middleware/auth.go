@@ -17,22 +17,32 @@ const (
 )
 
 // AuthMiddleware creates a JWT authentication middleware
+// It checks both Authorization header and httpOnly cookie
 func AuthMiddleware(jwtManager *utils.JWTManager) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var tokenString string
+
+		// First try Authorization header
 		authHeader := c.GetHeader(AuthorizationHeader)
-		if authHeader == "" {
-			utils.Unauthorized(c, "Authorization header is required")
+		if authHeader != "" && strings.HasPrefix(authHeader, BearerPrefix) {
+			tokenString = strings.TrimPrefix(authHeader, BearerPrefix)
+		}
+
+		// If no header token, try cookie
+		if tokenString == "" {
+			cookieToken, err := utils.GetAccessTokenFromCookie(c)
+			if err == nil && cookieToken != "" {
+				tokenString = cookieToken
+			}
+		}
+
+		// No token found
+		if tokenString == "" {
+			utils.Unauthorized(c, "Authentication required")
 			c.Abort()
 			return
 		}
 
-		if !strings.HasPrefix(authHeader, BearerPrefix) {
-			utils.Unauthorized(c, "Invalid authorization header format")
-			c.Abort()
-			return
-		}
-
-		tokenString := strings.TrimPrefix(authHeader, BearerPrefix)
 		claims, err := jwtManager.ValidateToken(tokenString)
 		if err != nil {
 			utils.Unauthorized(c, "Invalid or expired token")

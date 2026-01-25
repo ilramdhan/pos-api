@@ -60,12 +60,19 @@ func New(cfg *config.Config, db *database.Database) *Router {
 
 	// Handlers
 	healthHandler := handler.NewHealthHandler(cfg)
-	authHandler := handler.NewAuthHandler(authService)
+	authHandler := handler.NewAuthHandler(authService, cfg)
 	categoryHandler := handler.NewCategoryHandler(categoryService)
 	productHandler := handler.NewProductHandler(productService)
 	customerHandler := handler.NewCustomerHandler(customerService)
 	transactionHandler := handler.NewTransactionHandler(transactionService)
 	reportHandler := handler.NewReportHandler(reportService)
+	dashboardHandler := handler.NewDashboardHandler(
+		transactionService,
+		productService,
+		categoryService,
+		customerService,
+		reportService,
+	)
 
 	// Routes
 	// Health check (public)
@@ -83,19 +90,26 @@ func New(cfg *config.Config, db *database.Database) *Router {
 			auth.POST("/login", authHandler.Login)
 			auth.POST("/register", authHandler.Register)
 			auth.POST("/refresh", authHandler.Refresh)
+			auth.POST("/logout", authHandler.Logout)
+			auth.POST("/forgot-password", authHandler.ForgotPassword)
+			auth.POST("/reset-password", authHandler.ResetPassword)
 		}
 
 		// Protected routes
 		protected := v1.Group("")
 		protected.Use(middleware.AuthMiddleware(jwtManager))
 		{
-			// Auth
+			// Auth (protected)
 			protected.GET("/auth/me", authHandler.Me)
+			protected.PUT("/auth/me", authHandler.UpdateProfile)
+			protected.GET("/auth/me/activity", authHandler.GetActivityLog)
 
 			// Categories
 			categories := protected.Group("/categories")
 			{
 				categories.GET("", categoryHandler.List)
+				categories.GET("/stats", dashboardHandler.GetCategoryStats)
+				categories.GET("/activity-log", dashboardHandler.GetCategoryActivityLog)
 				categories.GET("/:id", categoryHandler.Get)
 				categories.POST("", middleware.RequireRole(models.RoleAdmin, models.RoleManager), categoryHandler.Create)
 				categories.PUT("/:id", middleware.RequireRole(models.RoleAdmin, models.RoleManager), categoryHandler.Update)
@@ -106,6 +120,8 @@ func New(cfg *config.Config, db *database.Database) *Router {
 			products := protected.Group("/products")
 			{
 				products.GET("", productHandler.List)
+				products.GET("/stats", dashboardHandler.GetProductStats)
+				products.GET("/stock-movements", dashboardHandler.GetStockMovements)
 				products.GET("/:id", productHandler.Get)
 				products.POST("", middleware.RequireRole(models.RoleAdmin, models.RoleManager), productHandler.Create)
 				products.PUT("/:id", middleware.RequireRole(models.RoleAdmin, models.RoleManager), productHandler.Update)
@@ -117,6 +133,7 @@ func New(cfg *config.Config, db *database.Database) *Router {
 			customers := protected.Group("/customers")
 			{
 				customers.GET("", customerHandler.List)
+				customers.GET("/stats", dashboardHandler.GetCustomerStats)
 				customers.GET("/:id", customerHandler.Get)
 				customers.POST("", customerHandler.Create)
 				customers.PUT("/:id", customerHandler.Update)
@@ -127,6 +144,7 @@ func New(cfg *config.Config, db *database.Database) *Router {
 			transactions := protected.Group("/transactions")
 			{
 				transactions.GET("", transactionHandler.List)
+				transactions.GET("/recent", dashboardHandler.GetRecentTransactions)
 				transactions.GET("/:id", transactionHandler.Get)
 				transactions.POST("", transactionHandler.Create)
 				transactions.PATCH("/:id/status", middleware.RequireRole(models.RoleAdmin, models.RoleManager), transactionHandler.UpdateStatus)
@@ -134,11 +152,21 @@ func New(cfg *config.Config, db *database.Database) *Router {
 
 			// Reports
 			reports := protected.Group("/reports")
-			reports.Use(middleware.RequireRole(models.RoleAdmin, models.RoleManager))
 			{
-				reports.GET("/sales/daily", reportHandler.DailySales)
-				reports.GET("/sales/monthly", reportHandler.MonthlySales)
-				reports.GET("/products/top", reportHandler.TopProducts)
+				// Dashboard (all authenticated users)
+				reports.GET("/dashboard/stats", dashboardHandler.GetDashboardStats)
+				reports.GET("/sales/realtime", dashboardHandler.GetRealtimeSales)
+
+				// Detailed reports (admin/manager only)
+				reports.GET("/sales/daily", middleware.RequireRole(models.RoleAdmin, models.RoleManager), reportHandler.DailySales)
+				reports.GET("/sales/monthly", middleware.RequireRole(models.RoleAdmin, models.RoleManager), reportHandler.MonthlySales)
+				reports.GET("/products/top", middleware.RequireRole(models.RoleAdmin, models.RoleManager), reportHandler.TopProducts)
+			}
+
+			// System
+			system := protected.Group("/system")
+			{
+				system.GET("/health/detailed", dashboardHandler.GetSystemHealth)
 			}
 		}
 	}

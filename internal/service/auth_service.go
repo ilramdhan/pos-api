@@ -172,3 +172,32 @@ func (s *AuthService) GetCurrentUser(ctx context.Context, userID string) (*dto.U
 		IsActive: user.IsActive,
 	}, nil
 }
+
+// UpdateProfile updates the current user's profile
+func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *dto.UpdateProfileRequest) (*dto.UserResponse, error) {
+	user, err := s.userRepo.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	if user == nil {
+		return nil, errors.New("user not found")
+	}
+
+	// Update fields
+	user.Name = req.Name
+	user.Email = req.Email
+	user.UpdatedAt = time.Now()
+
+	if err := s.userRepo.Update(ctx, user); err != nil {
+		return nil, err
+	}
+
+	return &dto.UserResponse{
+		ID:       user.ID,
+		Email:    user.Email,
+		Name:     user.Name,
+		Phone:    req.Phone,
+		Role:     user.Role,
+		IsActive: user.IsActive,
+	}, nil
+}
