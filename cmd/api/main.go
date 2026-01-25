@@ -20,11 +20,17 @@ import (
 
 func main() {
 	// Parse command line flags
-	forceSeed := flag.Bool("seed", false, "Force run database seeding")
+	forceSeed := flag.Bool("seed", false, "Force run database seeding (then start server)")
+	seedOnly := flag.Bool("seed-only", false, "Run seeding only, then exit (don't start server)")
 	flag.Parse()
 
 	// Also check environment variable for force seed
 	if os.Getenv("FORCE_SEED") == "true" {
+		*forceSeed = true
+	}
+
+	// seed-only implies force seed
+	if *seedOnly {
 		*forceSeed = true
 	}
 
@@ -53,6 +59,12 @@ func main() {
 		log.Println("Force seeding enabled, clearing and re-seeding database...")
 		clearDatabase(db.DB)
 		runSeed(db.DB)
+
+		// If seed-only, exit without starting server
+		if *seedOnly {
+			log.Println("Seed-only mode: exiting without starting server")
+			return
+		}
 	} else if shouldAutoSeed(db.DB) {
 		log.Println("Database is empty, running auto-seed...")
 		runSeed(db.DB)
