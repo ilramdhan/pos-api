@@ -73,5 +73,13 @@ func (p *Pagination) Limit() int {
 
 // OrderBy returns the ORDER BY clause for SQL queries
 func (p *Pagination) OrderBy() string {
-	return p.Sort + " " + p.Order
+	sort := p.Sort
+	order := p.Order
+	if sort == "" {
+		sort = "created_at"
+	}
+	if order == "" {
+		order = "desc"
+	}
+	return sort + " " + order
 }
