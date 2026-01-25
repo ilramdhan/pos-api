@@ -126,6 +126,7 @@ func New(cfg *config.Config, db *database.Database) *Router {
 				notifications.GET("", notificationHandler.GetNotifications)
 				notifications.PUT("/:id/read", notificationHandler.MarkAsRead)
 				notifications.PUT("/read-all", notificationHandler.MarkAllAsRead)
+				notifications.DELETE("/:id", notificationHandler.DeleteNotification)
 			}
 
 			// POS (Point of Sale)

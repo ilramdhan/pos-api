@@ -366,11 +366,12 @@ paths:
         "200":
           description: Held transaction deleted
 
-  # ============ NOTIFICATIONS ============
+  # ============ NOTIFICATIONS (Persisted in Database) ============
   /api/v1/notifications:
     get:
       tags: [Notifications]
       summary: Get notifications
+      description: Returns notifications persisted in database (survives service restart)
       security:
         - cookieAuth: []
       parameters:
@@ -378,7 +379,7 @@ paths:
           in: query
           schema:
             type: integer
-            default: 10
+            default: 50
         - name: unread_only
           in: query
           schema:
@@ -413,6 +414,18 @@ paths:
       responses:
         "200":
           description: All notifications marked as read
+
+  /api/v1/notifications/{id}:
+    delete:
+      tags: [Notifications]
+      summary: Delete notification
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Notification deleted
 
   # ============ CATEGORIES ============
   /api/v1/categories:
