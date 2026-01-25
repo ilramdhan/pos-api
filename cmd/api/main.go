@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"database/sql"
+	"flag"
 	"log"
 	"os"
 	"os/signal"
@@ -18,6 +19,15 @@ import (
 )
 
 func main() {
+	// Parse command line flags
+	forceSeed := flag.Bool("seed", false, "Force run database seeding")
+	flag.Parse()
+
+	// Also check environment variable for force seed
+	if os.Getenv("FORCE_SEED") == "true" {
+		*forceSeed = true
+	}
+
 	// Load .env file (optional for development)
 	_ = godotenv.Load()
 
@@ -38,10 +48,14 @@ func main() {
 		log.Printf("Warning: Migration failed: %v", err)
 	}
 
-	// Auto-seed if database is empty
-	if shouldAutoSeed(db.DB) {
+	// Run seed if forced or if database is empty
+	if *forceSeed {
+		log.Println("Force seeding enabled, clearing and re-seeding database...")
+		clearDatabase(db.DB)
+		runSeed(db.DB)
+	} else if shouldAutoSeed(db.DB) {
 		log.Println("Database is empty, running auto-seed...")
-		autoSeed(db.DB)
+		runSeed(db.DB)
 	}
 
 	// Setup router
@@ -73,10 +87,25 @@ func shouldAutoSeed(db *sql.DB) bool {
 	return count == 0
 }
 
-// autoSeed seeds the database with demo data
-func autoSeed(db *sql.DB) {
+// clearDatabase removes all data for re-seeding
+func clearDatabase(db *sql.DB) {
+	tables := []string{"transaction_items", "transactions", "products", "categories", "customers", "users"}
+	for _, table := range tables {
+		_, err := db.Exec("DELETE FROM " + table)
+		if err != nil {
+			log.Printf("Warning: Could not clear table %s: %v", table, err)
+		} else {
+			log.Printf("  ✓ Cleared table: %s", table)
+		}
+	}
+}
+
+// runSeed seeds the database with demo data
+func runSeed(db *sql.DB) {
 	ctx := context.Background()
 	now := time.Now()
+
+	log.Println("Running database seed...")
 
 	// Seed users
 	users := []struct {
@@ -93,11 +122,13 @@ func autoSeed(db *sql.DB) {
 	for _, u := range users {
 		hash, _ := bcrypt.GenerateFromPassword([]byte(u.password), bcrypt.DefaultCost)
 		_, err := db.ExecContext(ctx, `
-			INSERT OR IGNORE INTO users (id, email, password_hash, name, role, is_active, created_at, updated_at)
+			INSERT OR REPLACE INTO users (id, email, password_hash, name, role, is_active, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, 1, ?, ?)
 		`, uuid.New().String(), u.email, string(hash), u.name, u.role, now, now)
 		if err == nil {
 			log.Printf("  ✓ Seeded user: %s", u.email)
+		} else {
+			log.Printf("  ✗ Failed to seed user %s: %v", u.email, err)
 		}
 	}
 
@@ -117,7 +148,7 @@ func autoSeed(db *sql.DB) {
 	for _, c := range categories {
 		catIDs[c.slug] = c.id
 		_, err := db.ExecContext(ctx, `
-			INSERT OR IGNORE INTO categories (id, name, description, slug, is_active, created_at, updated_at)
+			INSERT OR REPLACE INTO categories (id, name, description, slug, is_active, created_at, updated_at)
 			VALUES (?, ?, ?, ?, 1, ?, ?)
 		`, c.id, c.name, c.name+" items", c.slug, now, now)
 		if err == nil {
@@ -147,7 +178,7 @@ func autoSeed(db *sql.DB) {
 	for _, p := range products {
 		catID := catIDs[p.catSlug]
 		_, err := db.ExecContext(ctx, `
-			INSERT OR IGNORE INTO products (id, category_id, sku, name, description, price, stock, image_url, is_active, created_at, updated_at)
+			INSERT OR REPLACE INTO products (id, category_id, sku, name, description, price, stock, image_url, is_active, created_at, updated_at)
 			VALUES (?, ?, ?, ?, ?, ?, ?, '', 1, ?, ?)
 		`, uuid.New().String(), catID, p.sku, p.name, p.name, p.price, p.stock, now, now)
 		if err == nil {
@@ -169,7 +200,7 @@ func autoSeed(db *sql.DB) {
 
 	for _, c := range customers {
 		_, err := db.ExecContext(ctx, `
-			INSERT OR IGNORE INTO customers (id, name, email, phone, address, loyalty_points, created_at, updated_at)
+			INSERT OR REPLACE INTO customers (id, name, email, phone, address, loyalty_points, created_at, updated_at)
 			VALUES (?, ?, ?, ?, '', ?, ?, ?)
 		`, uuid.New().String(), c.name, c.email, c.phone, c.points, now, now)
 		if err == nil {
@@ -177,10 +208,16 @@ func autoSeed(db *sql.DB) {
 		}
 	}
 
-	log.Println("Auto-seed completed!")
 	log.Println("")
-	log.Println("Test accounts:")
+	log.Println("═══════════════════════════════════════════")
+	log.Println("  Database seeding completed!")
+	log.Println("═══════════════════════════════════════════")
+	log.Println("")
+	log.Println("  Test accounts:")
+	log.Println("  ──────────────────────────────────────────")
 	log.Println("  admin@gopos.local    / Admin123!")
 	log.Println("  manager@gopos.local  / Manager123!")
 	log.Println("  cashier@gopos.local  / Cashier123!")
+	log.Println("═══════════════════════════════════════════")
+	log.Println("")
 }
