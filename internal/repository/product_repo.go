@@ -168,17 +168,31 @@ func (r *productRepository) List(ctx context.Context, filter dto.ProductListFilt
 	var products []*models.Product
 	for rows.Next() {
 		product := &models.Product{}
-		category := &models.Category{}
+		var catID, catName, catDesc, catSlug sql.NullString
+		var catIsActive sql.NullBool
+		var catCreatedAt, catUpdatedAt sql.NullTime
+
 		if err := rows.Scan(
 			&product.ID, &product.CategoryID, &product.SKU, &product.Name, &product.Description,
 			&product.Price, &product.Stock, &product.ImageURL, &product.IsActive,
 			&product.CreatedAt, &product.UpdatedAt,
-			&category.ID, &category.Name, &category.Description, &category.Slug,
-			&category.IsActive, &category.CreatedAt, &category.UpdatedAt,
+			&catID, &catName, &catDesc, &catSlug,
+			&catIsActive, &catCreatedAt, &catUpdatedAt,
 		); err != nil {
 			return nil, 0, err
 		}
-		product.Category = category
+
+		if catID.Valid {
+			product.Category = &models.Category{
+				ID:          catID.String,
+				Name:        catName.String,
+				Description: catDesc.String,
+				Slug:        catSlug.String,
+				IsActive:    catIsActive.Bool,
+				CreatedAt:   catCreatedAt.Time,
+				UpdatedAt:   catUpdatedAt.Time,
+			}
+		}
 		products = append(products, product)
 	}
 

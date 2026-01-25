@@ -76,7 +76,7 @@ func New(cfg *config.Config, db *database.Database) *Router {
 		reportService,
 	)
 	posHandler := handler.NewPOSHandler(productService, transactionService)
-	notificationHandler := handler.NewNotificationHandler()
+	notificationHandler := handler.NewNotificationHandler(db.DB)
 
 	// Routes
 	// Health check (public)

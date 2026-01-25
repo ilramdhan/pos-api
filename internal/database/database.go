@@ -70,6 +70,28 @@ func (d *Database) Migrate(migrationsPath string) error {
 		}
 	}
 
+	// Create notifications table
+	_, err = d.Exec(`
+		CREATE TABLE IF NOT EXISTS notifications (
+			id TEXT PRIMARY KEY,
+			user_id TEXT NOT NULL,
+			type TEXT NOT NULL,
+			title TEXT NOT NULL,
+			message TEXT NOT NULL,
+			is_read INTEGER DEFAULT 0,
+			action_url TEXT DEFAULT '',
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+		)
+	`)
+	if err != nil {
+		fmt.Printf("Note: notifications table may already exist: %v\n", err)
+	}
+
+	// Create indexes for notifications
+	d.Exec("CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)")
+	d.Exec("CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id, is_read)")
+
 	return nil
 }
 

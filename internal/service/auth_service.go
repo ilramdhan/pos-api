@@ -179,6 +179,7 @@ func (s *AuthService) GetCurrentUser(ctx context.Context, userID string) (*dto.U
 		ID:       user.ID,
 		Email:    user.Email,
 		Name:     user.Name,
+		Phone:    user.Phone,
 		Role:     user.Role,
 		IsActive: user.IsActive,
 	}, nil
