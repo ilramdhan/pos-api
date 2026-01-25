@@ -77,7 +77,7 @@ func (s *CategoryService) Update(ctx context.Context, id string, req *dto.Update
 	}
 
 	// Check slug uniqueness if changed
-	if category.Slug != req.Slug {
+	if req.Slug != "" && category.Slug != req.Slug {
 		existing, err := s.categoryRepo.GetBySlug(ctx, req.Slug)
 		if err != nil {
 			return nil, err
@@ -85,11 +85,16 @@ func (s *CategoryService) Update(ctx context.Context, id string, req *dto.Update
 		if existing != nil {
 			return nil, errors.New("slug already exists")
 		}
+		category.Slug = req.Slug
 	}
 
-	category.Name = req.Name
-	category.Description = req.Description
-	category.Slug = req.Slug
+	// Update only fields that are provided (partial update)
+	if req.Name != "" {
+		category.Name = req.Name
+	}
+	if req.Description != "" {
+		category.Description = req.Description
+	}
 	if req.IsActive != nil {
 		category.IsActive = *req.IsActive
 	}

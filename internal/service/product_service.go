@@ -92,17 +92,21 @@ func (s *ProductService) Update(ctx context.Context, id string, req *dto.UpdateP
 		return nil, errors.New("product not found")
 	}
 
-	// Validate category exists
-	category, err := s.categoryRepo.GetByID(ctx, req.CategoryID)
-	if err != nil {
-		return nil, err
-	}
-	if category == nil {
-		return nil, errors.New("category not found")
+	// Validate category exists if provided
+	var category *models.Category
+	if req.CategoryID != "" {
+		category, err = s.categoryRepo.GetByID(ctx, req.CategoryID)
+		if err != nil {
+			return nil, err
+		}
+		if category == nil {
+			return nil, errors.New("category not found")
+		}
+		product.CategoryID = req.CategoryID
 	}
 
 	// Check SKU uniqueness if changed
-	if product.SKU != req.SKU {
+	if req.SKU != "" && product.SKU != req.SKU {
 		existing, err := s.productRepo.GetBySKU(ctx, req.SKU)
 		if err != nil {
 			return nil, err
@@ -110,15 +114,25 @@ func (s *ProductService) Update(ctx context.Context, id string, req *dto.UpdateP
 		if existing != nil {
 			return nil, errors.New("SKU already exists")
 		}
+		product.SKU = req.SKU
 	}
 
-	product.CategoryID = req.CategoryID
-	product.SKU = req.SKU
-	product.Name = req.Name
-	product.Description = req.Description
-	product.Price = req.Price
-	product.Stock = req.Stock
-	product.ImageURL = req.ImageURL
+	// Update only fields that are provided (partial update)
+	if req.Name != "" {
+		product.Name = req.Name
+	}
+	if req.Description != "" {
+		product.Description = req.Description
+	}
+	if req.Price > 0 {
+		product.Price = req.Price
+	}
+	if req.Stock >= 0 {
+		product.Stock = req.Stock
+	}
+	if req.ImageURL != "" {
+		product.ImageURL = req.ImageURL
+	}
 	if req.IsActive != nil {
 		product.IsActive = *req.IsActive
 	}
@@ -128,7 +142,9 @@ func (s *ProductService) Update(ctx context.Context, id string, req *dto.UpdateP
 		return nil, err
 	}
 
-	product.Category = category
+	if category != nil {
+		product.Category = category
+	}
 	return s.toResponse(product), nil
 }
 

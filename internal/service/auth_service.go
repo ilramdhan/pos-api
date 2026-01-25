@@ -201,6 +201,9 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *dto
 	if req.Email != "" {
 		user.Email = req.Email
 	}
+	if req.Phone != "" {
+		user.Phone = req.Phone
+	}
 	user.UpdatedAt = time.Now()
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
@@ -211,7 +214,7 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *dto
 		ID:       user.ID,
 		Email:    user.Email,
 		Name:     user.Name,
-		Phone:    req.Phone,
+		Phone:    user.Phone,
 		Role:     user.Role,
 		IsActive: user.IsActive,
 	}, nil

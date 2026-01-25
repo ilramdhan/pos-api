@@ -19,11 +19,11 @@ func NewUserRepository(db *sql.DB) UserRepository {
 
 func (r *userRepository) Create(ctx context.Context, user *models.User) error {
 	query := `
-		INSERT INTO users (id, email, password_hash, name, role, is_active, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		INSERT INTO users (id, email, password_hash, name, phone, role, is_active, created_at, updated_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		user.ID, user.Email, user.PasswordHash, user.Name, user.Role,
+		user.ID, user.Email, user.PasswordHash, user.Name, user.Phone, user.Role,
 		user.IsActive, user.CreatedAt, user.UpdatedAt,
 	)
 	return err
@@ -31,12 +31,12 @@ func (r *userRepository) Create(ctx context.Context, user *models.User) error {
 
 func (r *userRepository) GetByID(ctx context.Context, id string) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, name, role, is_active, created_at, updated_at
+		SELECT id, email, password_hash, name, COALESCE(phone, '') as phone, role, is_active, created_at, updated_at
 		FROM users WHERE id = ?
 	`
 	user := &models.User{}
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
-		&user.ID, &user.Email, &user.PasswordHash, &user.Name, &user.Role,
+		&user.ID, &user.Email, &user.PasswordHash, &user.Name, &user.Phone, &user.Role,
 		&user.IsActive, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -47,12 +47,12 @@ func (r *userRepository) GetByID(ctx context.Context, id string) (*models.User, 
 
 func (r *userRepository) GetByEmail(ctx context.Context, email string) (*models.User, error) {
 	query := `
-		SELECT id, email, password_hash, name, role, is_active, created_at, updated_at
+		SELECT id, email, password_hash, name, COALESCE(phone, '') as phone, role, is_active, created_at, updated_at
 		FROM users WHERE email = ?
 	`
 	user := &models.User{}
 	err := r.db.QueryRowContext(ctx, query, email).Scan(
-		&user.ID, &user.Email, &user.PasswordHash, &user.Name, &user.Role,
+		&user.ID, &user.Email, &user.PasswordHash, &user.Name, &user.Phone, &user.Role,
 		&user.IsActive, &user.CreatedAt, &user.UpdatedAt,
 	)
 	if err == sql.ErrNoRows {
@@ -63,11 +63,11 @@ func (r *userRepository) GetByEmail(ctx context.Context, email string) (*models.
 
 func (r *userRepository) Update(ctx context.Context, user *models.User) error {
 	query := `
-		UPDATE users SET email = ?, name = ?, role = ?, is_active = ?, updated_at = ?
+		UPDATE users SET email = ?, name = ?, phone = ?, role = ?, is_active = ?, updated_at = ?
 		WHERE id = ?
 	`
 	_, err := r.db.ExecContext(ctx, query,
-		user.Email, user.Name, user.Role, user.IsActive, user.UpdatedAt, user.ID,
+		user.Email, user.Name, user.Phone, user.Role, user.IsActive, user.UpdatedAt, user.ID,
 	)
 	return err
 }
@@ -96,7 +96,7 @@ func (r *userRepository) List(ctx context.Context, role string, pagination utils
 
 	// Get paginated results
 	query := `
-		SELECT id, email, password_hash, name, role, is_active, created_at, updated_at
+		SELECT id, email, password_hash, name, COALESCE(phone, '') as phone, role, is_active, created_at, updated_at
 		FROM users ` + whereClause + `
 		ORDER BY ` + pagination.OrderBy() + `
 		LIMIT ? OFFSET ?
@@ -112,7 +112,7 @@ func (r *userRepository) List(ctx context.Context, role string, pagination utils
 	for rows.Next() {
 		user := &models.User{}
 		if err := rows.Scan(
-			&user.ID, &user.Email, &user.PasswordHash, &user.Name, &user.Role,
+			&user.ID, &user.Email, &user.PasswordHash, &user.Name, &user.Phone, &user.Role,
 			&user.IsActive, &user.CreatedAt, &user.UpdatedAt,
 		); err != nil {
 			return nil, 0, err

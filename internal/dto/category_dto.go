@@ -6,14 +6,14 @@ import "time"
 type CreateCategoryRequest struct {
 	Name        string `json:"name" validate:"required,min=2,max=100"`
 	Description string `json:"description" validate:"max=500"`
-	Slug        string `json:"slug" validate:"required,min=2,max=100,alphanum"`
+	Slug        string `json:"slug" validate:"required,min=2,max=100"`
 }
 
 // UpdateCategoryRequest represents a request to update a category
 type UpdateCategoryRequest struct {
-	Name        string `json:"name" validate:"required,min=2,max=100"`
+	Name        string `json:"name" validate:"omitempty,min=2,max=100"`
 	Description string `json:"description" validate:"max=500"`
-	Slug        string `json:"slug" validate:"required,min=2,max=100,alphanum"`
+	Slug        string `json:"slug" validate:"omitempty,min=2,max=100"`
 	IsActive    *bool  `json:"is_active"`
 }
 
