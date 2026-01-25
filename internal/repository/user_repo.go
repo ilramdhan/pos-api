@@ -78,22 +78,31 @@ func (r *userRepository) Delete(ctx context.Context, id string) error {
 	return err
 }
 
-func (r *userRepository) List(ctx context.Context, pagination utils.Pagination) ([]*models.User, int, error) {
+func (r *userRepository) List(ctx context.Context, role string, pagination utils.Pagination) ([]*models.User, int, error) {
+	// Build where clause
+	whereClause := ""
+	var args []interface{}
+	if role != "" {
+		whereClause = "WHERE role = ?"
+		args = append(args, role)
+	}
+
 	// Get total count
 	var total int
-	countQuery := `SELECT COUNT(*) FROM users`
-	if err := r.db.QueryRowContext(ctx, countQuery).Scan(&total); err != nil {
+	countQuery := `SELECT COUNT(*) FROM users ` + whereClause
+	if err := r.db.QueryRowContext(ctx, countQuery, args...).Scan(&total); err != nil {
 		return nil, 0, err
 	}
 
 	// Get paginated results
 	query := `
 		SELECT id, email, password_hash, name, role, is_active, created_at, updated_at
-		FROM users
+		FROM users ` + whereClause + `
 		ORDER BY ` + pagination.OrderBy() + `
 		LIMIT ? OFFSET ?
 	`
-	rows, err := r.db.QueryContext(ctx, query, pagination.Limit(), pagination.Offset())
+	args = append(args, pagination.Limit(), pagination.Offset())
+	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, 0, err
 	}
