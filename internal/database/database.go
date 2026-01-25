@@ -59,6 +59,17 @@ func (d *Database) Migrate(migrationsPath string) error {
 		return fmt.Errorf("failed to execute migration: %w", err)
 	}
 
+	// Add phone column if it doesn't exist (SQLite doesn't support IF NOT EXISTS for columns)
+	_, err = d.Exec("SELECT phone FROM users LIMIT 1")
+	if err != nil {
+		// Column doesn't exist, add it
+		_, err = d.Exec("ALTER TABLE users ADD COLUMN phone TEXT DEFAULT ''")
+		if err != nil {
+			// Ignore error if column already exists
+			fmt.Printf("Note: phone column may already exist: %v\n", err)
+		}
+	}
+
 	return nil
 }
 
