@@ -8,10 +8,11 @@ type LoginRequest struct {
 
 // RegisterRequest represents a registration request
 type RegisterRequest struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=8"`
-	Name     string `json:"name" validate:"required,min=2,max=100"`
-	Role     string `json:"role" validate:"required,oneof=admin manager cashier"`
+	Email           string `json:"email" validate:"required,email"`
+	Password        string `json:"password" validate:"required,min=8"`
+	ConfirmPassword string `json:"confirmPassword" validate:"omitempty"`
+	Name            string `json:"name" validate:"required,min=2,max=100"`
+	Role            string `json:"role" validate:"omitempty,oneof=admin manager cashier"`
 }
 
 // RefreshTokenRequest represents a token refresh request

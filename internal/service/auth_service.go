@@ -78,6 +78,17 @@ func (s *AuthService) Register(ctx context.Context, req *dto.RegisterRequest) (*
 		return nil, errors.New("email already registered")
 	}
 
+	// Validate password confirmation if provided
+	if req.ConfirmPassword != "" && req.Password != req.ConfirmPassword {
+		return nil, errors.New("passwords do not match")
+	}
+
+	// Set default role if not specified
+	role := req.Role
+	if role == "" {
+		role = models.RoleCashier
+	}
+
 	// Hash password
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	if err != nil {
@@ -90,7 +101,7 @@ func (s *AuthService) Register(ctx context.Context, req *dto.RegisterRequest) (*
 		Email:        req.Email,
 		PasswordHash: string(hashedPassword),
 		Name:         req.Name,
-		Role:         req.Role,
+		Role:         role,
 		IsActive:     true,
 		CreatedAt:    now,
 		UpdatedAt:    now,
