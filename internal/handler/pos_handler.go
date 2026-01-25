@@ -41,7 +41,8 @@ func (h *POSHandler) GetProducts(c *gin.Context) {
 		return
 	}
 
-	var posProducts []gin.H
+	// Initialize as empty slice (not nil) to return [] instead of null in JSON
+	posProducts := make([]gin.H, 0)
 	for _, p := range products {
 		categoryName := ""
 		if p.Category != nil {

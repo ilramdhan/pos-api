@@ -25,9 +25,9 @@ type RefreshTokenRequest struct {
 
 // UpdateProfileRequest represents a profile update request
 type UpdateProfileRequest struct {
-	Name  string `json:"name" validate:"required,min=2,max=100"`
-	Email string `json:"email" validate:"required,email"`
-	Phone string `json:"phone" validate:"omitempty,min=10,max=20"`
+	Name  string `json:"name" validate:"omitempty,min=2,max=100"`
+	Email string `json:"email" validate:"omitempty,email"`
+	Phone string `json:"phone" validate:"omitempty,max=20"`
 }
 
 // ForgotPasswordRequest represents a forgot password request

@@ -194,9 +194,13 @@ func (s *AuthService) UpdateProfile(ctx context.Context, userID string, req *dto
 		return nil, errors.New("user not found")
 	}
 
-	// Update fields
-	user.Name = req.Name
-	user.Email = req.Email
+	// Update only fields that are provided (partial update)
+	if req.Name != "" {
+		user.Name = req.Name
+	}
+	if req.Email != "" {
+		user.Email = req.Email
+	}
 	user.UpdatedAt = time.Now()
 
 	if err := s.userRepo.Update(ctx, user); err != nil {
