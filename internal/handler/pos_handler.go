@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -37,13 +38,9 @@ func (h *POSHandler) GetProducts(c *gin.Context) {
 		Search:     search,
 	}, utils.Pagination{Page: 1, PerPage: 100})
 	if err != nil {
-		// Log the error but return empty array instead of 500
-		// This allows FE to still render without breaking
-		c.JSON(http.StatusOK, gin.H{
-			"success": true,
-			"message": "No products available",
-			"data":    []gin.H{},
-		})
+		// Log error for debugging
+		fmt.Printf("[POS] Error fetching products: %v\n", err)
+		utils.InternalServerError(c, "Failed to fetch products: "+err.Error())
 		return
 	}
 
