@@ -1,10 +1,10 @@
-# Build stage
-FROM golang:1.21-alpine AS builder
+# Build stage - using Debian for better CGO compatibility
+FROM golang:1.21-bookworm AS builder
 
 WORKDIR /app
 
 # Install build dependencies
-RUN apk add --no-cache gcc musl-dev
+RUN apt-get update && apt-get install -y gcc libc6-dev
 
 # Copy go mod files
 COPY go.mod go.sum ./
@@ -14,15 +14,19 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=1 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/api
+RUN CGO_ENABLED=1 GOOS=linux go build -a -o main ./cmd/api
 
 # Runtime stage
-FROM alpine:3.19
+FROM debian:bookworm-slim
 
 WORKDIR /app
 
 # Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata sqlite
+RUN apt-get update && apt-get install -y --no-install-recommends \
+  ca-certificates \
+  tzdata \
+  sqlite3 \
+  && rm -rf /var/lib/apt/lists/*
 
 # Copy binary from builder
 COPY --from=builder /app/main .
