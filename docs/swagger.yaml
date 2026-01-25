@@ -1069,11 +1069,18 @@ components:
 
     UpdateProfileRequest:
       type: object
+      description: All fields are optional - only provided fields will be updated
       properties:
         name:
           type: string
+          minLength: 2
+          maxLength: 100
+        email:
+          type: string
+          format: email
         phone:
           type: string
+          maxLength: 20
 
     UserResponse:
       type: object
