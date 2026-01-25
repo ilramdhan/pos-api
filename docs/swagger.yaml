@@ -1,13 +1,15 @@
 openapi: 3.0.3
 info:
   title: POS API
-  description: Point of Sales REST API
-  version: 1.0.0
+  description: Point of Sales REST API with JWT Authentication and HttpOnly Cookies
+  version: 1.1.0
   contact:
     name: API Support
 servers:
+  - url: https://gopos-api.ilramdhan.dev
+    description: Production server
   - url: http://localhost:8080
-    description: Local development server
+    description: Local development
 
 tags:
   - name: Health
@@ -23,7 +25,9 @@ tags:
   - name: Transactions
     description: Transaction management
   - name: Reports
-    description: Sales reports
+    description: Sales reports and dashboard
+  - name: System
+    description: System status
 
 paths:
   /health:
@@ -38,10 +42,12 @@ paths:
               schema:
                 $ref: "#/components/schemas/HealthResponse"
 
+  # ============ AUTH ============
   /api/v1/auth/login:
     post:
       tags: [Auth]
       summary: User login
+      description: Login and receive JWT tokens in HttpOnly cookies
       requestBody:
         required: true
         content:
@@ -50,13 +56,23 @@ paths:
               $ref: "#/components/schemas/LoginRequest"
       responses:
         "200":
-          description: Login successful
+          description: Login successful (tokens set in cookies)
+          headers:
+            Set-Cookie:
+              schema:
+                type: string
+              description: HttpOnly cookies containing access_token and refresh_token
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/AuthResponse"
+                $ref: "#/components/schemas/LoginResponse"
         "401":
-          $ref: "#/components/responses/Unauthorized"
+          description: Invalid credentials
+          content:
+            application/json:
+              example:
+                success: false
+                message: "invalid email or password"
 
   /api/v1/auth/register:
     post:
@@ -71,19 +87,59 @@ paths:
       responses:
         "201":
           description: Registration successful
+        "400":
+          description: Validation error or email already exists
           content:
             application/json:
-              schema:
-                $ref: "#/components/schemas/AuthResponse"
-        "400":
-          $ref: "#/components/responses/BadRequest"
+              example:
+                success: false
+                message: "email already registered"
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [Auth]
+      summary: Refresh access token
+      description: Uses refresh_token from HttpOnly cookie
+      responses:
+        "200":
+          description: Token refreshed
+        "401":
+          description: Invalid or expired refresh token
+
+  /api/v1/auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout user
+      description: Clears HttpOnly authentication cookies
+      responses:
+        "200":
+          description: Successfully logged out
+          content:
+            application/json:
+              example:
+                success: true
+                message: "Successfully logged out"
+
+  /api/v1/auth/forgot-password:
+    post:
+      tags: [Auth]
+      summary: Request password reset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForgotPasswordRequest"
+      responses:
+        "200":
+          description: Reset email sent (if email exists)
 
   /api/v1/auth/me:
     get:
       tags: [Auth]
       summary: Get current user
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: User retrieved
@@ -93,28 +149,55 @@ paths:
                 $ref: "#/components/schemas/UserResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+    put:
+      tags: [Auth]
+      summary: Update profile
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateProfileRequest"
+      responses:
+        "200":
+          description: Profile updated
 
+  /api/v1/auth/me/activity:
+    get:
+      tags: [Auth]
+      summary: Get user activity log
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+      responses:
+        "200":
+          description: Activity log retrieved
+
+  # ============ CATEGORIES ============
   /api/v1/categories:
     get:
       tags: [Categories]
       summary: List categories
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PerPage"
       responses:
         "200":
           description: Categories retrieved
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/CategoryListResponse"
     post:
       tags: [Categories]
       summary: Create category
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -124,15 +207,37 @@ paths:
       responses:
         "201":
           description: Category created
-        "400":
-          $ref: "#/components/responses/BadRequest"
+
+  /api/v1/categories/stats:
+    get:
+      tags: [Categories]
+      summary: Get category statistics
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Category stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryStatsResponse"
+
+  /api/v1/categories/activity-log:
+    get:
+      tags: [Categories]
+      summary: Get category activity log
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Activity log retrieved
 
   /api/v1/categories/{id}:
     get:
       tags: [Categories]
       summary: Get category by ID
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/ID"
       responses:
@@ -144,15 +249,9 @@ paths:
       tags: [Categories]
       summary: Update category
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/ID"
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/UpdateCategoryRequest"
       responses:
         "200":
           description: Category updated
@@ -160,19 +259,20 @@ paths:
       tags: [Categories]
       summary: Delete category
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/ID"
       responses:
         "200":
           description: Category deleted
 
+  # ============ PRODUCTS ============
   /api/v1/products:
     get:
       tags: [Products]
       summary: List products
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PerPage"
@@ -191,23 +291,48 @@ paths:
       tags: [Products]
       summary: Create product
       security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateProductRequest"
+        - cookieAuth: []
       responses:
         "201":
           description: Product created
+
+  /api/v1/products/stats:
+    get:
+      tags: [Products]
+      summary: Get product/inventory statistics
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Product stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductStatsResponse"
+
+  /api/v1/products/stock-movements:
+    get:
+      tags: [Products]
+      summary: Get stock movement log
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: product_id
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Stock movements retrieved
 
   /api/v1/products/{id}:
     get:
       tags: [Products]
       summary: Get product by ID
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/ID"
       responses:
@@ -217,7 +342,7 @@ paths:
       tags: [Products]
       summary: Update product
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/ID"
       responses:
@@ -227,7 +352,7 @@ paths:
       tags: [Products]
       summary: Delete product
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/ID"
       responses:
@@ -239,7 +364,7 @@ paths:
       tags: [Products]
       summary: Update product stock
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/ID"
       requestBody:
@@ -252,12 +377,13 @@ paths:
         "200":
           description: Stock updated
 
+  # ============ CUSTOMERS ============
   /api/v1/customers:
     get:
       tags: [Customers]
       summary: List customers
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Customers retrieved
@@ -265,23 +391,64 @@ paths:
       tags: [Customers]
       summary: Create customer
       security:
-        - bearerAuth: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreateCustomerRequest"
+        - cookieAuth: []
       responses:
         "201":
           description: Customer created
 
+  /api/v1/customers/stats:
+    get:
+      tags: [Customers]
+      summary: Get customer statistics
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Customer stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerStatsResponse"
+
+  /api/v1/customers/{id}:
+    get:
+      tags: [Customers]
+      summary: Get customer by ID
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Customer retrieved
+    put:
+      tags: [Customers]
+      summary: Update customer
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Customer updated
+    delete:
+      tags: [Customers]
+      summary: Delete customer
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Customer deleted
+
+  # ============ TRANSACTIONS ============
   /api/v1/transactions:
     get:
       tags: [Transactions]
       summary: List transactions
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
           description: Transactions retrieved
@@ -289,7 +456,7 @@ paths:
       tags: [Transactions]
       summary: Create transaction (sale)
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       requestBody:
         required: true
         content:
@@ -300,24 +467,89 @@ paths:
         "201":
           description: Transaction created
 
+  /api/v1/transactions/recent:
+    get:
+      tags: [Transactions]
+      summary: Get recent transactions
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 5
+      responses:
+        "200":
+          description: Recent transactions
+
   /api/v1/transactions/{id}:
     get:
       tags: [Transactions]
       summary: Get transaction by ID
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/ID"
       responses:
         "200":
           description: Transaction retrieved
 
+  /api/v1/transactions/{id}/status:
+    patch:
+      tags: [Transactions]
+      summary: Update transaction status
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Status updated
+
+  # ============ REPORTS ============
+  /api/v1/reports/dashboard/stats:
+    get:
+      tags: [Reports]
+      summary: Get dashboard statistics
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStatsResponse"
+
+  /api/v1/reports/sales/realtime:
+    get:
+      tags: [Reports]
+      summary: Get realtime sales data
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: interval
+          in: query
+          schema:
+            type: string
+            enum: [hourly, 15min]
+            default: hourly
+        - name: date
+          in: query
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Realtime sales data
+
   /api/v1/reports/sales/daily:
     get:
       tags: [Reports]
       summary: Get daily sales report
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: date_from
           in: query
@@ -331,24 +563,24 @@ paths:
             format: date
       responses:
         "200":
-          description: Report retrieved
+          description: Daily sales report
 
   /api/v1/reports/sales/monthly:
     get:
       tags: [Reports]
       summary: Get monthly sales report
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       responses:
         "200":
-          description: Report retrieved
+          description: Monthly sales report
 
   /api/v1/reports/products/top:
     get:
       tags: [Reports]
       summary: Get top selling products
       security:
-        - bearerAuth: []
+        - cookieAuth: []
       parameters:
         - name: limit
           in: query
@@ -357,14 +589,30 @@ paths:
             default: 10
       responses:
         "200":
-          description: Report retrieved
+          description: Top products report
+
+  # ============ SYSTEM ============
+  /api/v1/system/health/detailed:
+    get:
+      tags: [System]
+      summary: Get detailed system health
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: System health status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SystemHealthResponse"
 
 components:
   securitySchemes:
-    bearerAuth:
-      type: http
-      scheme: bearer
-      bearerFormat: JWT
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: access_token
+      description: HttpOnly cookie authentication
 
   parameters:
     ID:
@@ -430,13 +678,35 @@ components:
         email:
           type: string
           format: email
+          example: "admin@pos.local"
         password:
           type: string
           minLength: 6
+          example: "Admin123!"
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        data:
+          type: object
+          properties:
+            user:
+              $ref: "#/components/schemas/UserResponse"
+            token:
+              type: object
+              properties:
+                expires_in:
+                  type: integer
+                token_type:
+                  type: string
 
     RegisterRequest:
       type: object
-      required: [email, password, name, role]
+      required: [email, password, name]
       properties:
         email:
           type: string
@@ -444,24 +714,40 @@ components:
         password:
           type: string
           minLength: 8
+        confirmPassword:
+          type: string
         name:
+          type: string
+        businessName:
+          type: string
+        licenseKey:
           type: string
         role:
           type: string
           enum: [admin, manager, cashier]
-
-    AuthResponse:
-      type: object
-      properties:
-        success:
+          default: cashier
+        agreeToTerms:
           type: boolean
-        data:
-          type: object
-          properties:
-            user:
-              $ref: "#/components/schemas/UserResponse"
-            token:
-              $ref: "#/components/schemas/TokenResponse"
+
+    ForgotPasswordRequest:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+
+    UpdateProfileRequest:
+      type: object
+      required: [name, email]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
 
     UserResponse:
       type: object
@@ -472,22 +758,12 @@ components:
           type: string
         name:
           type: string
+        phone:
+          type: string
         role:
           type: string
         is_active:
           type: boolean
-
-    TokenResponse:
-      type: object
-      properties:
-        access_token:
-          type: string
-        refresh_token:
-          type: string
-        expires_in:
-          type: integer
-        token_type:
-          type: string
 
     CreateCategoryRequest:
       type: object
@@ -500,62 +776,54 @@ components:
         slug:
           type: string
 
-    UpdateCategoryRequest:
-      type: object
-      properties:
-        name:
-          type: string
-        description:
-          type: string
-        slug:
-          type: string
-        is_active:
-          type: boolean
-
-    CategoryListResponse:
+    CategoryStatsResponse:
       type: object
       properties:
         success:
           type: boolean
         data:
-          type: array
-          items:
-            $ref: "#/components/schemas/CategoryResponse"
-        meta:
-          $ref: "#/components/schemas/Meta"
+          type: object
+          properties:
+            total_categories:
+              type: integer
+            new_this_week:
+              type: integer
+            active_categories:
+              type: integer
+            coverage_percent:
+              type: integer
 
-    CategoryResponse:
+    ProductStatsResponse:
       type: object
       properties:
-        id:
-          type: string
-        name:
-          type: string
-        description:
-          type: string
-        slug:
-          type: string
-        is_active:
+        success:
           type: boolean
+        data:
+          type: object
+          properties:
+            total_sku:
+              type: integer
+            low_stock_count:
+              type: integer
+            out_of_stock_count:
+              type: integer
+            inventory_value:
+              type: number
 
-    CreateProductRequest:
+    CustomerStatsResponse:
       type: object
-      required: [category_id, sku, name, price]
       properties:
-        category_id:
-          type: string
-        sku:
-          type: string
-        name:
-          type: string
-        description:
-          type: string
-        price:
-          type: number
-        stock:
-          type: integer
-        image_url:
-          type: string
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            total_customers:
+              type: integer
+            new_this_month:
+              type: integer
+            avg_loyalty_points:
+              type: integer
 
     UpdateStockRequest:
       type: object
@@ -566,19 +834,6 @@ components:
         operation:
           type: string
           enum: [add, subtract, set]
-
-    CreateCustomerRequest:
-      type: object
-      required: [name]
-      properties:
-        name:
-          type: string
-        email:
-          type: string
-        phone:
-          type: string
-        address:
-          type: string
 
     CreateTransactionRequest:
       type: object
@@ -603,11 +858,69 @@ components:
               quantity:
                 type: integer
 
+    DashboardStatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            today_sales:
+              type: object
+              properties:
+                amount:
+                  type: number
+                change_percent:
+                  type: number
+            active_orders:
+              type: object
+              properties:
+                count:
+                  type: integer
+            net_margin:
+              type: object
+              properties:
+                percent:
+                  type: number
+
+    SystemHealthResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            terminals:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  type:
+                    type: string
+                  status:
+                    type: string
+            servers:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  uptime_percent:
+                    type: number
+                  status:
+                    type: string
+
     ErrorResponse:
       type: object
       properties:
         success:
           type: boolean
+          example: false
         message:
           type: string
         errors:
