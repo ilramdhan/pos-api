@@ -1,8 +1,18 @@
 openapi: 3.0.3
 info:
-  title: POS API
-  description: Point of Sales REST API with JWT Authentication and HttpOnly Cookies
-  version: 1.1.0
+  title: GoPOS API
+  description: |
+    Point of Sales REST API with JWT Authentication via HttpOnly Cookies.
+
+    ## Authentication
+    This API uses HttpOnly cookies for authentication. After login, tokens are automatically
+    set as cookies and will be sent with subsequent requests.
+
+    ## Test Accounts (Auto-seeded)
+    - **Admin**: admin@gopos.local / Admin123!
+    - **Manager**: manager@gopos.local / Manager123!
+    - **Cashier**: cashier@gopos.local / Cashier123!
+  version: 2.0.0
   contact:
     name: API Support
 servers:
@@ -16,6 +26,12 @@ tags:
     description: Health check endpoints
   - name: Auth
     description: Authentication endpoints
+  - name: Users
+    description: User management (Admin only)
+  - name: POS
+    description: Point of Sale operations
+  - name: Notifications
+    description: User notifications
   - name: Categories
     description: Category management
   - name: Products
@@ -37,42 +53,36 @@ paths:
       responses:
         "200":
           description: Service is healthy
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/HealthResponse"
 
   # ============ AUTH ============
   /api/v1/auth/login:
     post:
       tags: [Auth]
       summary: User login
-      description: Login and receive JWT tokens in HttpOnly cookies
+      description: Returns JWT tokens in HttpOnly cookies
       requestBody:
         required: true
         content:
           application/json:
             schema:
               $ref: "#/components/schemas/LoginRequest"
+            example:
+              email: "admin@gopos.local"
+              password: "Admin123!"
       responses:
         "200":
-          description: Login successful (tokens set in cookies)
+          description: Login successful
           headers:
             Set-Cookie:
               schema:
                 type: string
-              description: HttpOnly cookies containing access_token and refresh_token
+              description: HttpOnly cookies (access_token, refresh_token)
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoginResponse"
         "401":
           description: Invalid credentials
-          content:
-            application/json:
-              example:
-                success: false
-                message: "invalid email or password"
 
   /api/v1/auth/register:
     post:
@@ -88,37 +98,27 @@ paths:
         "201":
           description: Registration successful
         "400":
-          description: Validation error or email already exists
-          content:
-            application/json:
-              example:
-                success: false
-                message: "email already registered"
+          description: Validation error or email exists
 
   /api/v1/auth/refresh:
     post:
       tags: [Auth]
       summary: Refresh access token
-      description: Uses refresh_token from HttpOnly cookie
+      description: Uses refresh_token from cookie
       responses:
         "200":
           description: Token refreshed
         "401":
-          description: Invalid or expired refresh token
+          description: Invalid refresh token
 
   /api/v1/auth/logout:
     post:
       tags: [Auth]
       summary: Logout user
-      description: Clears HttpOnly authentication cookies
+      description: Clears authentication cookies
       responses:
         "200":
-          description: Successfully logged out
-          content:
-            application/json:
-              example:
-                success: true
-                message: "Successfully logged out"
+          description: Logged out
 
   /api/v1/auth/forgot-password:
     post:
@@ -132,7 +132,7 @@ paths:
               $ref: "#/components/schemas/ForgotPasswordRequest"
       responses:
         "200":
-          description: Reset email sent (if email exists)
+          description: Reset email sent if email exists
 
   /api/v1/auth/me:
     get:
@@ -147,8 +147,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/UserResponse"
-        "401":
-          $ref: "#/components/responses/Unauthorized"
     put:
       tags: [Auth]
       summary: Update profile
@@ -178,7 +176,243 @@ paths:
             default: 10
       responses:
         "200":
-          description: Activity log retrieved
+          description: Activity log
+
+  # ============ USERS (Admin Only) ============
+  /api/v1/users:
+    get:
+      tags: [Users]
+      summary: List all users
+      description: Admin only
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [admin, manager, cashier]
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+      responses:
+        "200":
+          description: Users retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UserListResponse"
+        "403":
+          description: Admin access required
+    post:
+      tags: [Users]
+      summary: Create user
+      description: Admin only
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: User created
+        "403":
+          description: Admin access required
+
+  /api/v1/users/{id}:
+    get:
+      tags: [Users]
+      summary: Get user by ID
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: User retrieved
+    put:
+      tags: [Users]
+      summary: Update user
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUserRequest"
+      responses:
+        "200":
+          description: User updated
+    delete:
+      tags: [Users]
+      summary: Delete user
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: User deleted
+
+  /api/v1/users/{id}/reset-password:
+    put:
+      tags: [Users]
+      summary: Reset user password
+      description: Admin only
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_password]
+              properties:
+                new_password:
+                  type: string
+                  minLength: 8
+      responses:
+        "200":
+          description: Password reset
+
+  # ============ POS ============
+  /api/v1/pos/products:
+    get:
+      tags: [POS]
+      summary: Get products for POS
+      description: Returns products with stock and price for POS display
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: category_id
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Products retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/POSProductListResponse"
+
+  /api/v1/pos/transactions:
+    post:
+      tags: [POS]
+      summary: Create POS transaction
+      description: Create a sale from POS terminal
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/POSTransactionRequest"
+      responses:
+        "201":
+          description: Transaction created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/POSTransactionResponse"
+
+  /api/v1/pos/hold:
+    get:
+      tags: [POS]
+      summary: Get held transactions
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Held transactions retrieved
+    post:
+      tags: [POS]
+      summary: Hold transaction
+      description: Save transaction temporarily
+      security:
+        - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/HoldTransactionRequest"
+      responses:
+        "201":
+          description: Transaction held
+
+  /api/v1/pos/hold/{id}:
+    delete:
+      tags: [POS]
+      summary: Delete held transaction
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Held transaction deleted
+
+  # ============ NOTIFICATIONS ============
+  /api/v1/notifications:
+    get:
+      tags: [Notifications]
+      summary: Get notifications
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 10
+        - name: unread_only
+          in: query
+          schema:
+            type: boolean
+            default: false
+      responses:
+        "200":
+          description: Notifications retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotificationListResponse"
+
+  /api/v1/notifications/{id}/read:
+    put:
+      tags: [Notifications]
+      summary: Mark notification as read
+      security:
+        - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/ID"
+      responses:
+        "200":
+          description: Notification marked as read
+
+  /api/v1/notifications/read-all:
+    put:
+      tags: [Notifications]
+      summary: Mark all notifications as read
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: All notifications marked as read
 
   # ============ CATEGORIES ============
   /api/v1/categories:
@@ -196,6 +430,7 @@ paths:
     post:
       tags: [Categories]
       summary: Create category
+      description: Admin/Manager only
       security:
         - cookieAuth: []
       requestBody:
@@ -216,7 +451,7 @@ paths:
         - cookieAuth: []
       responses:
         "200":
-          description: Category stats
+          description: Stats retrieved
           content:
             application/json:
               schema:
@@ -230,7 +465,7 @@ paths:
         - cookieAuth: []
       responses:
         "200":
-          description: Activity log retrieved
+          description: Activity log
 
   /api/v1/categories/{id}:
     get:
@@ -243,8 +478,6 @@ paths:
       responses:
         "200":
           description: Category retrieved
-        "404":
-          $ref: "#/components/responses/NotFound"
     put:
       tags: [Categories]
       summary: Update category
@@ -258,6 +491,7 @@ paths:
     delete:
       tags: [Categories]
       summary: Delete category
+      description: Admin only
       security:
         - cookieAuth: []
       parameters:
@@ -290,8 +524,15 @@ paths:
     post:
       tags: [Products]
       summary: Create product
+      description: Admin/Manager only
       security:
         - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProductRequest"
       responses:
         "201":
           description: Product created
@@ -299,12 +540,12 @@ paths:
   /api/v1/products/stats:
     get:
       tags: [Products]
-      summary: Get product/inventory statistics
+      summary: Get product statistics
       security:
         - cookieAuth: []
       responses:
         "200":
-          description: Product stats
+          description: Stats retrieved
           content:
             application/json:
               schema:
@@ -325,7 +566,7 @@ paths:
             type: string
       responses:
         "200":
-          description: Stock movements retrieved
+          description: Stock movements
 
   /api/v1/products/{id}:
     get:
@@ -351,6 +592,7 @@ paths:
     delete:
       tags: [Products]
       summary: Delete product
+      description: Admin only
       security:
         - cookieAuth: []
       parameters:
@@ -384,6 +626,13 @@ paths:
       summary: List customers
       security:
         - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: search
+          in: query
+          schema:
+            type: string
       responses:
         "200":
           description: Customers retrieved
@@ -392,6 +641,12 @@ paths:
       summary: Create customer
       security:
         - cookieAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCustomerRequest"
       responses:
         "201":
           description: Customer created
@@ -404,7 +659,7 @@ paths:
         - cookieAuth: []
       responses:
         "200":
-          description: Customer stats
+          description: Stats retrieved
           content:
             application/json:
               schema:
@@ -434,6 +689,7 @@ paths:
     delete:
       tags: [Customers]
       summary: Delete customer
+      description: Admin/Manager only
       security:
         - cookieAuth: []
       parameters:
@@ -449,12 +705,30 @@ paths:
       summary: List transactions
       security:
         - cookieAuth: []
+      parameters:
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/PerPage"
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, completed, cancelled, refunded]
+        - name: date_from
+          in: query
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          schema:
+            type: string
+            format: date
       responses:
         "200":
           description: Transactions retrieved
     post:
       tags: [Transactions]
-      summary: Create transaction (sale)
+      summary: Create transaction
       security:
         - cookieAuth: []
       requestBody:
@@ -483,6 +757,20 @@ paths:
         "200":
           description: Recent transactions
 
+  /api/v1/transactions/stats:
+    get:
+      tags: [Transactions]
+      summary: Get transaction statistics
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Stats retrieved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionStatsResponse"
+
   /api/v1/transactions/{id}:
     get:
       tags: [Transactions]
@@ -499,10 +787,22 @@ paths:
     patch:
       tags: [Transactions]
       summary: Update transaction status
+      description: Admin/Manager only
       security:
         - cookieAuth: []
       parameters:
         - $ref: "#/components/parameters/ID"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [completed, cancelled, refunded]
       responses:
         "200":
           description: Status updated
@@ -542,12 +842,43 @@ paths:
             format: date
       responses:
         "200":
-          description: Realtime sales data
+          description: Realtime sales
 
   /api/v1/reports/sales/daily:
     get:
       tags: [Reports]
       summary: Get daily sales report
+      description: Admin only
+      security:
+        - cookieAuth: []
+      parameters:
+        - name: date_from
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: date_to
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Daily sales report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DailySalesResponse"
+        "403":
+          description: Admin access required
+
+  /api/v1/reports/sales/weekly:
+    get:
+      tags: [Reports]
+      summary: Get weekly sales report
+      description: Admin only
       security:
         - cookieAuth: []
       parameters:
@@ -563,22 +894,32 @@ paths:
             format: date
       responses:
         "200":
-          description: Daily sales report
+          description: Weekly sales report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WeeklySalesResponse"
+        "403":
+          description: Admin access required
 
   /api/v1/reports/sales/monthly:
     get:
       tags: [Reports]
       summary: Get monthly sales report
+      description: Admin only
       security:
         - cookieAuth: []
       responses:
         "200":
-          description: Monthly sales report
+          description: Monthly sales
+        "403":
+          description: Admin access required
 
   /api/v1/reports/products/top:
     get:
       tags: [Reports]
       summary: Get top selling products
+      description: Admin only
       security:
         - cookieAuth: []
       parameters:
@@ -587,9 +928,34 @@ paths:
           schema:
             type: integer
             default: 10
+        - name: period
+          in: query
+          schema:
+            type: string
+            enum: [day, week, month]
+            default: month
       responses:
         "200":
-          description: Top products report
+          description: Top products
+        "403":
+          description: Admin access required
+
+  /api/v1/reports/categories/performance:
+    get:
+      tags: [Reports]
+      summary: Get category performance
+      description: Admin only
+      security:
+        - cookieAuth: []
+      responses:
+        "200":
+          description: Category performance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CategoryPerformanceResponse"
+        "403":
+          description: Admin access required
 
   # ============ SYSTEM ============
   /api/v1/system/health/detailed:
@@ -600,7 +966,7 @@ paths:
         - cookieAuth: []
       responses:
         "200":
-          description: System health status
+          description: System health
           content:
             application/json:
               schema:
@@ -635,42 +1001,8 @@ components:
         type: integer
         default: 10
 
-  responses:
-    BadRequest:
-      description: Bad request
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
-    Unauthorized:
-      description: Unauthorized
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
-    NotFound:
-      description: Not found
-      content:
-        application/json:
-          schema:
-            $ref: "#/components/schemas/ErrorResponse"
-
   schemas:
-    HealthResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-        message:
-          type: string
-        data:
-          type: object
-          properties:
-            status:
-              type: string
-            version:
-              type: string
-
+    # Auth
     LoginRequest:
       type: object
       required: [email, password]
@@ -678,11 +1010,9 @@ components:
         email:
           type: string
           format: email
-          example: "admin@pos.local"
         password:
           type: string
           minLength: 6
-          example: "Admin123!"
 
     LoginResponse:
       type: object
@@ -739,13 +1069,9 @@ components:
 
     UpdateProfileRequest:
       type: object
-      required: [name, email]
       properties:
         name:
           type: string
-        email:
-          type: string
-          format: email
         phone:
           type: string
 
@@ -765,6 +1091,197 @@ components:
         is_active:
           type: boolean
 
+    # Users
+    UserListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/UserResponse"
+        meta:
+          $ref: "#/components/schemas/Meta"
+
+    CreateUserRequest:
+      type: object
+      required: [name, email, password, role]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        password:
+          type: string
+          minLength: 8
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [admin, manager, cashier]
+
+    UpdateUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        phone:
+          type: string
+        role:
+          type: string
+          enum: [admin, manager, cashier]
+        is_active:
+          type: boolean
+
+    # POS
+    POSProductListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              name:
+                type: string
+              sku:
+                type: string
+              price:
+                type: number
+              stock:
+                type: integer
+              category_id:
+                type: string
+              category_name:
+                type: string
+              image_url:
+                type: string
+
+    POSTransactionRequest:
+      type: object
+      required: [payment_method, items]
+      properties:
+        customer_id:
+          type: string
+        payment_method:
+          type: string
+          enum: [cash, card, ewallet]
+        items:
+          type: array
+          items:
+            type: object
+            required: [product_id, quantity]
+            properties:
+              product_id:
+                type: string
+              quantity:
+                type: integer
+              unit_price:
+                type: number
+              discount:
+                type: number
+        subtotal:
+          type: number
+        tax_amount:
+          type: number
+        discount_amount:
+          type: number
+        total_amount:
+          type: number
+        amount_paid:
+          type: number
+        change_amount:
+          type: number
+        notes:
+          type: string
+
+    POSTransactionResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            id:
+              type: string
+            invoice_number:
+              type: string
+            status:
+              type: string
+            total_amount:
+              type: number
+            created_at:
+              type: string
+              format: date-time
+
+    HoldTransactionRequest:
+      type: object
+      properties:
+        customer_id:
+          type: string
+        customer_name:
+          type: string
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              product_id:
+                type: string
+              quantity:
+                type: integer
+        total_amount:
+          type: number
+        notes:
+          type: string
+
+    # Notifications
+    NotificationListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            unread_count:
+              type: integer
+            notifications:
+              type: array
+              items:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  type:
+                    type: string
+                    enum:
+                      [
+                        low_stock,
+                        out_of_stock,
+                        new_order,
+                        order_completed,
+                        system,
+                      ]
+                  title:
+                    type: string
+                  message:
+                    type: string
+                  is_read:
+                    type: boolean
+                  created_at:
+                    type: string
+                  action_url:
+                    type: string
+
+    # Categories
     CreateCategoryRequest:
       type: object
       required: [name, slug]
@@ -792,6 +1309,35 @@ components:
               type: integer
             coverage_percent:
               type: integer
+            most_popular:
+              type: object
+              properties:
+                id:
+                  type: string
+                name:
+                  type: string
+                items_sold:
+                  type: integer
+
+    # Products
+    CreateProductRequest:
+      type: object
+      required: [category_id, sku, name, price]
+      properties:
+        category_id:
+          type: string
+        sku:
+          type: string
+        name:
+          type: string
+        description:
+          type: string
+        price:
+          type: number
+        stock:
+          type: integer
+        image_url:
+          type: string
 
     ProductStatsResponse:
       type: object
@@ -809,21 +1355,8 @@ components:
               type: integer
             inventory_value:
               type: number
-
-    CustomerStatsResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-        data:
-          type: object
-          properties:
-            total_customers:
-              type: integer
-            new_this_month:
-              type: integer
-            avg_loyalty_points:
-              type: integer
+            value_change_percent:
+              type: number
 
     UpdateStockRequest:
       type: object
@@ -835,6 +1368,41 @@ components:
           type: string
           enum: [add, subtract, set]
 
+    # Customers
+    CreateCustomerRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        address:
+          type: string
+
+    CustomerStatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            total_customers:
+              type: integer
+            change_percent:
+              type: number
+            new_this_month:
+              type: integer
+            new_change_percent:
+              type: number
+            avg_loyalty_points:
+              type: integer
+
+    # Transactions
     CreateTransactionRequest:
       type: object
       required: [payment_method, items]
@@ -852,12 +1420,33 @@ components:
           type: array
           items:
             type: object
+            required: [product_id, quantity]
             properties:
               product_id:
                 type: string
               quantity:
                 type: integer
 
+    TransactionStatsResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            total_transactions:
+              type: integer
+            total_revenue:
+              type: number
+            avg_order_value:
+              type: number
+            today_transactions:
+              type: integer
+            today_revenue:
+              type: number
+
+    # Reports
     DashboardStatsResponse:
       type: object
       properties:
@@ -873,16 +1462,105 @@ components:
                   type: number
                 change_percent:
                   type: number
+                comparison:
+                  type: string
             active_orders:
               type: object
               properties:
                 count:
+                  type: integer
+                avg_prep_time_mins:
                   type: integer
             net_margin:
               type: object
               properties:
                 percent:
                   type: number
+                change_percent:
+                  type: number
+
+    DailySalesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            period:
+              type: string
+            date_from:
+              type: string
+            date_to:
+              type: string
+            total_revenue:
+              type: number
+            total_transactions:
+              type: integer
+            avg_order_value:
+              type: number
+            chart_data:
+              type: array
+              items:
+                type: object
+                properties:
+                  date:
+                    type: string
+                  revenue:
+                    type: number
+                  transactions:
+                    type: integer
+
+    WeeklySalesResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            period:
+              type: string
+            total_revenue:
+              type: number
+            total_transactions:
+              type: integer
+            avg_order_value:
+              type: number
+            chart_data:
+              type: array
+              items:
+                type: object
+                properties:
+                  week:
+                    type: string
+                  week_start:
+                    type: string
+                  revenue:
+                    type: number
+                  transactions:
+                    type: integer
+
+    CategoryPerformanceResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            type: object
+            properties:
+              category_id:
+                type: string
+              category_name:
+                type: string
+              total_sold:
+                type: integer
+              total_revenue:
+                type: number
+              percentage:
+                type: number
 
     SystemHealthResponse:
       type: object
@@ -901,6 +1579,8 @@ components:
                     type: string
                   type:
                     type: string
+                  latency_ms:
+                    type: integer
                   status:
                     type: string
             servers:
@@ -914,24 +1594,15 @@ components:
                     type: number
                   status:
                     type: string
-
-    ErrorResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-          example: false
-        message:
-          type: string
-        errors:
-          type: array
-          items:
-            type: object
-            properties:
-              field:
-                type: string
-              message:
-                type: string
+            integrations:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  status:
+                    type: string
 
     Meta:
       type: object
@@ -944,3 +1615,12 @@ components:
           type: integer
         total_pages:
           type: integer
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        message:
+          type: string
