@@ -36,6 +36,7 @@ func (s *UserService) List(ctx context.Context, role string, pagination utils.Pa
 			ID:          u.ID,
 			Name:        u.Name,
 			Email:       u.Email,
+			Phone:       u.Phone,
 			Role:        u.Role,
 			IsActive:    u.IsActive,
 			LastLoginAt: u.UpdatedAt.Format(time.RFC3339),
@@ -60,6 +61,7 @@ func (s *UserService) GetByID(ctx context.Context, id string) (*dto.UserListResp
 		ID:          user.ID,
 		Name:        user.Name,
 		Email:       user.Email,
+		Phone:       user.Phone,
 		Role:        user.Role,
 		IsActive:    user.IsActive,
 		LastLoginAt: user.UpdatedAt.Format(time.RFC3339),
@@ -86,6 +88,7 @@ func (s *UserService) Create(ctx context.Context, req *dto.CreateUserRequest) (*
 		ID:           uuid.New().String(),
 		Name:         req.Name,
 		Email:        req.Email,
+		Phone:        req.Phone,
 		PasswordHash: string(hashedPassword),
 		Role:         req.Role,
 		IsActive:     true,
@@ -101,6 +104,7 @@ func (s *UserService) Create(ctx context.Context, req *dto.CreateUserRequest) (*
 		ID:        user.ID,
 		Name:      user.Name,
 		Email:     user.Email,
+		Phone:     user.Phone,
 		Role:      user.Role,
 		IsActive:  user.IsActive,
 		CreatedAt: user.CreatedAt.Format(time.RFC3339),
@@ -118,7 +122,7 @@ func (s *UserService) Update(ctx context.Context, id string, req *dto.UpdateUser
 		user.Name = req.Name
 	}
 	if req.Phone != "" {
-		// Store in name field or add phone field
+		user.Phone = req.Phone
 	}
 	if req.Role != "" {
 		user.Role = req.Role
@@ -136,6 +140,7 @@ func (s *UserService) Update(ctx context.Context, id string, req *dto.UpdateUser
 		ID:        user.ID,
 		Name:      user.Name,
 		Email:     user.Email,
+		Phone:     user.Phone,
 		Role:      user.Role,
 		IsActive:  user.IsActive,
 		CreatedAt: user.CreatedAt.Format(time.RFC3339),

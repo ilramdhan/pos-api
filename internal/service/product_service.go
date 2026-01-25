@@ -124,11 +124,11 @@ func (s *ProductService) Update(ctx context.Context, id string, req *dto.UpdateP
 	if req.Description != "" {
 		product.Description = req.Description
 	}
-	if req.Price > 0 {
-		product.Price = req.Price
+	if req.Price != nil && *req.Price > 0 {
+		product.Price = *req.Price
 	}
-	if req.Stock >= 0 {
-		product.Stock = req.Stock
+	if req.Stock != nil {
+		product.Stock = *req.Stock
 	}
 	if req.ImageURL != "" {
 		product.ImageURL = req.ImageURL

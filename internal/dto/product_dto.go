@@ -15,14 +15,14 @@ type CreateProductRequest struct {
 
 // UpdateProductRequest represents a request to update a product
 type UpdateProductRequest struct {
-	CategoryID  string  `json:"category_id" validate:"omitempty,uuid"`
-	SKU         string  `json:"sku" validate:"omitempty,min=3,max=50"`
-	Name        string  `json:"name" validate:"omitempty,min=2,max=200"`
-	Description string  `json:"description" validate:"max=1000"`
-	Price       float64 `json:"price" validate:"omitempty,gte=0"`
-	Stock       int     `json:"stock" validate:"omitempty,gte=0"`
-	ImageURL    string  `json:"image_url" validate:"omitempty"`
-	IsActive    *bool   `json:"is_active"`
+	CategoryID  string   `json:"category_id" validate:"omitempty,uuid"`
+	SKU         string   `json:"sku" validate:"omitempty,min=3,max=50"`
+	Name        string   `json:"name" validate:"omitempty,min=2,max=200"`
+	Description string   `json:"description" validate:"max=1000"`
+	Price       *float64 `json:"price" validate:"omitempty,gte=0"`
+	Stock       *int     `json:"stock" validate:"omitempty,gte=0"`
+	ImageURL    string   `json:"image_url" validate:"omitempty"`
+	IsActive    *bool    `json:"is_active"`
 }
 
 // UpdateStockRequest represents a request to update product stock
