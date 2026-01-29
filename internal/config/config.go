@@ -106,6 +106,10 @@ func getDBConnectionString() string {
 		conn = c
 	}
 
+	if conn != "" {
+		return conn
+	}
+
 	// 2. Fallback: Construct from Zeabur/standard components
 	host := viper.GetString("POSTGRES_HOST")
 	if host == "" {
