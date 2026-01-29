@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/ilramdhan/pos-api/internal/config"
@@ -71,11 +70,7 @@ func resolveToIPv4(connStr string) (string, error) {
 	// Simple parsing to find hostname
 	// Format: postgres://user:pass@hostname:port/db...
 	// We want to replace hostname with IPv4
-	
-// resolveToIPv4 parses the connection string, resolves the hostname to an IPv4 address,
-// and returns a new connection string with the IP address.
-// This is necessary because some environments (like Zeabur) have broken IPv6 routing to Supabase.
-func resolveToIPv4(connStr string) (string, error) {
+
 	u, err := url.Parse(connStr)
 	if err != nil {
 		return "", err
