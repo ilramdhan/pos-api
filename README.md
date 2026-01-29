@@ -1,38 +1,41 @@
-# POS API - Point of Sales Backend
+# GoPOS API - Point of Sales Backend
 
-A modern, scalable REST API backend for Point of Sales (POS) systems built with Go and best practices.
+A modern, scalable REST API backend for Point of Sales (POS) systems built with Go, PostgreSQL/Supabase, and best practices.
 
 ![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-4169E1?style=flat&logo=postgresql)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 
 ## ✨ Features
 
 - **RESTful API** with versioning (`/api/v1/`)
 - **JWT Authentication** with role-based access control (Admin, Manager, Cashier)
-- **SQLite Database** (D1 Cloudflare compatible)
+- **PostgreSQL/Supabase Database** for production-ready persistence
 - **Rate Limiting** per IP address
 - **Standardized Responses** with validation errors
 - **Docker Ready** with multi-stage builds
 - **Health Checks** for monitoring
 - **Sales Reports** (daily, monthly, top products)
+- **POS Features** (transactions, customers, products, categories)
 
 ## 🏗️ Architecture
 
 ```
 ├── cmd/api/              # Application entry point
 ├── internal/
-│   ├── config/           # Configuration management
-│   ├── database/         # Database connection & migrations
+│   ├── config/           # Configuration management (Viper)
+│   ├── database/         # PostgreSQL connection & migrations
 │   ├── dto/              # Data Transfer Objects
 │   ├── handler/          # HTTP handlers
 │   ├── middleware/       # Auth, CORS, Rate Limit, Logger
 │   ├── models/           # Domain models
-│   ├── repository/       # Data access layer
+│   ├── repository/       # Data access layer (PostgreSQL)
 │   ├── router/           # Route definitions
 │   ├── service/          # Business logic
 │   └── utils/            # Helpers (JWT, Response, Validation)
-├── scripts/              # Database seeder
-└── docs/                 # API documentation
+├── scripts/              # Database seed script
+├── tests/                # Integration tests
+└── docs/                 # API documentation (Swagger)
 ```
 
 ## 🚀 Quick Start
@@ -40,45 +43,50 @@ A modern, scalable REST API backend for Point of Sales (POS) systems built with 
 ### Prerequisites
 
 - Go 1.21 or higher
+- PostgreSQL database (Supabase recommended)
 - Docker (optional)
 
-### Local Development
+### 1. Supabase Setup
 
-1. **Clone & Install Dependencies**
+1. **Create a Supabase Project**
+   - Go to [supabase.com](https://supabase.com) and create a new project
+   - Note your project password (you'll need it)
 
-   ```bash
-   git clone <repository-url>
-   cd goland-dasar
-   go mod tidy
-   ```
+2. **Get Connection String**
+   - Navigate to: Settings → Database → Connection string
+   - Copy the "Transaction pooler" connection string
+   - Replace `[YOUR-PASSWORD]` with your database password
 
-2. **Configure Environment**
+3. **Run Database Migration**
+   - Go to SQL Editor in Supabase dashboard
+   - Copy contents of `internal/database/migrations/001_init_postgres.sql`
+   - Execute the SQL to create all tables
 
-   ```bash
-   cp .env.example .env
-   # Edit .env as needed
-   ```
+4. **Seed Initial Data (Optional)**
+   - Copy contents of `scripts/seed_postgres.sql`
+   - Execute in SQL Editor to add test data
 
-3. **Seed Database**
+### 2. Local Development
 
-   ```bash
-   make seed
-   # Or: go run ./scripts/seed.go
-   ```
+```bash
+# Clone repository
+git clone <repository-url>
+cd goland-dasar
+go mod tidy
 
-4. **Run Server**
+# Configure environment
+cp .env.example .env
+# Edit .env and set your DB_CONN (Supabase connection string)
 
-   ```bash
-   make dev
-   # Or: go run ./cmd/api/main.go
-   ```
+# Run server
+make dev
+# Or: go run ./cmd/api/main.go
 
-5. **Test Health Check**
-   ```bash
-   curl http://localhost:8080/health
-   ```
+# Test health check
+curl http://localhost:8080/health
+```
 
-### Docker
+### 3. Docker Deployment
 
 ```bash
 # Build and run
@@ -88,39 +96,63 @@ docker-compose up --build
 docker-compose down
 ```
 
+## 🔧 Configuration
+
+| Variable                   | Description                           | Default                 |
+| -------------------------- | ------------------------------------- | ----------------------- |
+| `APP_ENV`                  | Environment (development/production)  | development             |
+| `APP_PORT`                 | Server port                           | 8080                    |
+| `DB_CONN`                  | PostgreSQL/Supabase connection string | (required)              |
+| `JWT_SECRET`               | JWT signing secret                    | (change in production!) |
+| `JWT_EXPIRY_HOURS`         | Access token expiry                   | 24                      |
+| `JWT_REFRESH_EXPIRY_HOURS` | Refresh token expiry                  | 168 (7 days)            |
+| `RATE_LIMIT_RPS`           | Requests per second limit             | 100                     |
+| `CORS_ALLOWED_ORIGINS`     | Allowed CORS origins                  | http://localhost:3000   |
+
+### Example `.env` Configuration
+
+```env
+APP_ENV=development
+APP_PORT=8080
+DB_CONN=postgres://postgres.projectid:password@aws-0-region.pooler.supabase.com:6543/postgres?sslmode=require
+JWT_SECRET=your-super-secret-jwt-key
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
+```
+
 ## 🔐 Authentication
 
-### Test Credentials
+### Default Test Credentials
 
-| Email             | Password    | Role    |
-| ----------------- | ----------- | ------- |
-| admin@pos.local   | Admin123!   | admin   |
-| manager@pos.local | Manager123! | manager |
-| cashier@pos.local | Cashier123! | cashier |
+| Email               | Password    | Role    |
+| ------------------- | ----------- | ------- |
+| admin@gopos.local   | Admin123!   | admin   |
+| manager@gopos.local | Manager123! | manager |
+| cashier@gopos.local | Cashier123! | cashier |
 
 ### Login Example
 
 ```bash
 curl -X POST http://localhost:8080/api/v1/auth/login \
   -H "Content-Type: application/json" \
-  -d '{"email": "admin@pos.local", "password": "Admin123!"}'
+  -d '{"email": "admin@gopos.local", "password": "Admin123!"}'
 ```
 
-### Using Token
+### Using Token (Cookie-based)
+
+After login, authentication cookies are automatically sent. For API testing:
 
 ```bash
 curl http://localhost:8080/api/v1/products \
-  -H "Authorization: Bearer <your-token>"
+  --cookie "access_token=<your-token>"
 ```
 
 ## 📡 API Endpoints
 
 ### Health
 
-| Method | Endpoint         | Description            |
-| ------ | ---------------- | ---------------------- |
-| GET    | `/health`        | Health check           |
-| GET    | `/api/v1/health` | Versioned health check |
+| Method | Endpoint  | Description  |
+| ------ | --------- | ------------ |
+| GET    | `/health` | Health check |
 
 ### Authentication
 
@@ -129,7 +161,9 @@ curl http://localhost:8080/api/v1/products \
 | POST   | `/api/v1/auth/login`    | Login            | No   |
 | POST   | `/api/v1/auth/register` | Register         | No   |
 | POST   | `/api/v1/auth/refresh`  | Refresh token    | No   |
+| POST   | `/api/v1/auth/logout`   | Logout           | No   |
 | GET    | `/api/v1/auth/me`       | Get current user | Yes  |
+| PUT    | `/api/v1/auth/me`       | Update profile   | Yes  |
 
 ### Categories
 
@@ -171,6 +205,16 @@ curl http://localhost:8080/api/v1/products \
 | POST   | `/api/v1/transactions`            | Create sale   | Yes           |
 | PATCH  | `/api/v1/transactions/:id/status` | Update status | Admin/Manager |
 
+### Users (Admin Only)
+
+| Method | Endpoint            | Description | Auth  |
+| ------ | ------------------- | ----------- | ----- |
+| GET    | `/api/v1/users`     | List all    | Admin |
+| GET    | `/api/v1/users/:id` | Get by ID   | Admin |
+| POST   | `/api/v1/users`     | Create      | Admin |
+| PUT    | `/api/v1/users/:id` | Update      | Admin |
+| DELETE | `/api/v1/users/:id` | Delete      | Admin |
+
 ### Reports
 
 | Method | Endpoint                        | Description   | Auth          |
@@ -179,15 +223,21 @@ curl http://localhost:8080/api/v1/products \
 | GET    | `/api/v1/reports/sales/monthly` | Monthly sales | Admin/Manager |
 | GET    | `/api/v1/reports/products/top`  | Top products  | Admin/Manager |
 
-## 🔧 Configuration
+### Dashboard
 
-| Variable         | Description                          | Default        |
-| ---------------- | ------------------------------------ | -------------- |
-| `APP_ENV`        | Environment (development/production) | development    |
-| `APP_PORT`       | Server port                          | 8080           |
-| `JWT_SECRET`     | JWT signing secret                   | (change this!) |
-| `DB_PATH`        | SQLite database path                 | ./data/pos.db  |
-| `RATE_LIMIT_RPS` | Requests per second limit            | 100            |
+| Method | Endpoint            | Description       | Auth          |
+| ------ | ------------------- | ----------------- | ------------- |
+| GET    | `/api/v1/dashboard` | Dashboard summary | Admin/Manager |
+
+### POS
+
+| Method | Endpoint               | Description      | Auth |
+| ------ | ---------------------- | ---------------- | ---- |
+| GET    | `/api/v1/pos/products` | POS product list | Yes  |
+| POST   | `/api/v1/pos/checkout` | Checkout         | Yes  |
+| POST   | `/api/v1/pos/hold`     | Hold transaction | Yes  |
+| GET    | `/api/v1/pos/held`     | Get held items   | Yes  |
+| DELETE | `/api/v1/pos/held/:id` | Delete held item | Yes  |
 
 ## 📝 Response Format
 
@@ -217,6 +267,27 @@ curl http://localhost:8080/api/v1/products \
 }
 ```
 
+## 🧪 Testing
+
+### Running Integration Tests
+
+```bash
+# Set up test database (use a separate Supabase project or local PostgreSQL)
+export TEST_DB_CONN="postgres://user:pass@host:5432/pos_test?sslmode=disable"
+
+# Run tests
+go test -v ./tests/...
+
+# Run specific test
+go test -v ./tests/... -run TestAuthLogin
+```
+
+### Test Coverage
+
+```bash
+go test -cover ./...
+```
+
 ## 🛠️ Make Commands
 
 ```bash
@@ -224,9 +295,37 @@ make help          # Show all commands
 make dev           # Run development server
 make build         # Build binary
 make test          # Run tests
-make seed          # Seed database
 make docker-build  # Build Docker image
 make docker-run    # Run with Docker Compose
+```
+
+## 📚 API Documentation
+
+Swagger documentation is available at:
+
+- Development: `http://localhost:8080/docs/swagger.yaml`
+- See `docs/swagger.yaml` for OpenAPI specification
+
+## 🚀 Deployment
+
+### Supabase + VPS/Cloud
+
+1. **Set up Supabase database** (see Quick Start section)
+2. **Build the binary**:
+   ```bash
+   CGO_ENABLED=0 GOOS=linux go build -o gopos-api ./cmd/api/
+   ```
+3. **Configure environment** on your server
+4. **Run with systemd** or container orchestration
+
+### Environment Variables for Production
+
+```env
+APP_ENV=production
+APP_PORT=8080
+DB_CONN=<your-supabase-connection-string>
+JWT_SECRET=<strong-random-secret>
+CORS_ALLOWED_ORIGINS=https://your-frontend-domain.com
 ```
 
 ## 📄 License

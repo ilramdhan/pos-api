@@ -23,7 +23,7 @@ func NewProductRepository(db *sql.DB) ProductRepository {
 func (r *productRepository) Create(ctx context.Context, product *models.Product) error {
 	query := `
 		INSERT INTO products (id, category_id, sku, name, description, price, stock, image_url, is_active, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		product.ID, product.CategoryID, product.SKU, product.Name, product.Description,
@@ -39,7 +39,7 @@ func (r *productRepository) GetByID(ctx context.Context, id string) (*models.Pro
 		       c.id, c.name, COALESCE(c.description, ''), c.slug, c.is_active, c.created_at, c.updated_at
 		FROM products p
 		LEFT JOIN categories c ON p.category_id = c.id
-		WHERE p.id = ?
+		WHERE p.id = $1
 	`
 	product := &models.Product{}
 	category := &models.Category{}
@@ -65,7 +65,7 @@ func (r *productRepository) GetByID(ctx context.Context, id string) (*models.Pro
 func (r *productRepository) GetBySKU(ctx context.Context, sku string) (*models.Product, error) {
 	query := `
 		SELECT id, category_id, sku, name, COALESCE(description, ''), price, stock, COALESCE(image_url, ''), is_active, created_at, updated_at
-		FROM products WHERE sku = ?
+		FROM products WHERE sku = $1
 	`
 	product := &models.Product{}
 	err := r.db.QueryRowContext(ctx, query, sku).Scan(
@@ -81,9 +81,9 @@ func (r *productRepository) GetBySKU(ctx context.Context, sku string) (*models.P
 
 func (r *productRepository) Update(ctx context.Context, product *models.Product) error {
 	query := `
-		UPDATE products SET category_id = ?, sku = ?, name = ?, description = ?, price = ?, 
-		       stock = ?, image_url = ?, is_active = ?, updated_at = ?
-		WHERE id = ?
+		UPDATE products SET category_id = $1, sku = $2, name = $3, description = $4, price = $5, 
+		       stock = $6, image_url = $7, is_active = $8, updated_at = $9
+		WHERE id = $10
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		product.CategoryID, product.SKU, product.Name, product.Description,
@@ -94,13 +94,13 @@ func (r *productRepository) Update(ctx context.Context, product *models.Product)
 }
 
 func (r *productRepository) Delete(ctx context.Context, id string) error {
-	query := `DELETE FROM products WHERE id = ?`
+	query := `DELETE FROM products WHERE id = $1`
 	_, err := r.db.ExecContext(ctx, query, id)
 	return err
 }
 
 func (r *productRepository) UpdateStock(ctx context.Context, id string, quantity int) error {
-	query := `UPDATE products SET stock = ? WHERE id = ?`
+	query := `UPDATE products SET stock = $1 WHERE id = $2`
 	_, err := r.db.ExecContext(ctx, query, quantity, id)
 	return err
 }
@@ -109,30 +109,36 @@ func (r *productRepository) List(ctx context.Context, filter dto.ProductListFilt
 	// Build where clause
 	var conditions []string
 	var args []interface{}
+	argIndex := 1
 
 	if filter.CategoryID != "" {
-		conditions = append(conditions, "p.category_id = ?")
+		conditions = append(conditions, fmt.Sprintf("p.category_id = $%d", argIndex))
 		args = append(args, filter.CategoryID)
+		argIndex++
 	}
 	if filter.Search != "" {
-		conditions = append(conditions, "(p.name LIKE ? OR p.sku LIKE ?)")
+		conditions = append(conditions, fmt.Sprintf("(p.name ILIKE $%d OR p.sku ILIKE $%d)", argIndex, argIndex+1))
 		searchTerm := "%" + filter.Search + "%"
 		args = append(args, searchTerm, searchTerm)
+		argIndex += 2
 	}
 	if filter.MinPrice > 0 {
-		conditions = append(conditions, "p.price >= ?")
+		conditions = append(conditions, fmt.Sprintf("p.price >= $%d", argIndex))
 		args = append(args, filter.MinPrice)
+		argIndex++
 	}
 	if filter.MaxPrice > 0 {
-		conditions = append(conditions, "p.price <= ?")
+		conditions = append(conditions, fmt.Sprintf("p.price <= $%d", argIndex))
 		args = append(args, filter.MaxPrice)
+		argIndex++
 	}
 	if filter.InStock != nil && *filter.InStock {
 		conditions = append(conditions, "p.stock > 0")
 	}
 	if filter.IsActive != nil {
-		conditions = append(conditions, "p.is_active = ?")
+		conditions = append(conditions, fmt.Sprintf("p.is_active = $%d", argIndex))
 		args = append(args, *filter.IsActive)
+		argIndex++
 	}
 
 	whereClause := ""
@@ -147,7 +153,7 @@ func (r *productRepository) List(ctx context.Context, filter dto.ProductListFilt
 		return nil, 0, err
 	}
 
-	// Get paginated results
+	// Build paginated query
 	query := fmt.Sprintf(`
 		SELECT p.id, p.category_id, p.sku, p.name, COALESCE(p.description, ''), p.price, p.stock, COALESCE(p.image_url, ''), p.is_active, p.created_at, p.updated_at,
 		       c.id, c.name, COALESCE(c.description, ''), c.slug, c.is_active, c.created_at, c.updated_at
@@ -155,8 +161,8 @@ func (r *productRepository) List(ctx context.Context, filter dto.ProductListFilt
 		LEFT JOIN categories c ON p.category_id = c.id
 		%s
 		ORDER BY p.%s
-		LIMIT ? OFFSET ?
-	`, whereClause, pagination.OrderBy())
+		LIMIT $%d OFFSET $%d
+	`, whereClause, pagination.OrderBy(), argIndex, argIndex+1)
 
 	args = append(args, pagination.Limit(), pagination.Offset())
 	rows, err := r.db.QueryContext(ctx, query, args...)

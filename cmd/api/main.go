@@ -14,7 +14,6 @@ import (
 	"github.com/ilramdhan/pos-api/internal/config"
 	"github.com/ilramdhan/pos-api/internal/database"
 	"github.com/ilramdhan/pos-api/internal/router"
-	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -34,10 +33,7 @@ func main() {
 		*forceSeed = true
 	}
 
-	// Load .env file (optional for development)
-	_ = godotenv.Load()
-
-	// Load configuration
+	// Load configuration (Viper handles .env file automatically)
 	cfg := config.Load()
 
 	log.Printf("Starting %s v%s in %s mode\n", cfg.App.Name, cfg.App.Version, cfg.App.Env)

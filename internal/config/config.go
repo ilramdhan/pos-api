@@ -1,23 +1,22 @@
 package config
 
 import (
-	"os"
-	"strconv"
+	"log"
 	"strings"
-	"time"
+
+	"github.com/spf13/viper"
 )
 
-// Config holds all application configuration
+// Config holds all configuration for the application
 type Config struct {
-	App      AppConfig
-	JWT      JWTConfig
-	Database DatabaseConfig
+	App       AppConfig
+	JWT       JWTConfig
+	Database  DatabaseConfig
 	RateLimit RateLimitConfig
-	CORS     CORSConfig
-	Log      LogConfig
+	CORS      CORSConfig
 }
 
-// AppConfig holds application-specific configuration
+// AppConfig holds application-level configuration
 type AppConfig struct {
 	Env     string
 	Port    string
@@ -25,24 +24,19 @@ type AppConfig struct {
 	Version string
 }
 
-// JWTConfig holds JWT configuration
+// JWTConfig holds JWT authentication configuration
 type JWTConfig struct {
 	Secret             string
-	ExpiryHours        time.Duration
-	RefreshExpiryHours time.Duration
+	ExpiryHours        int
+	RefreshExpiryHours int
 }
 
-// DatabaseConfig holds database configuration
+// DatabaseConfig holds PostgreSQL/Supabase database configuration
 type DatabaseConfig struct {
-	Driver string
-	Path   string
-	// D1 specific
-	D1DatabaseID string
-	D1AccountID  string
-	D1APIToken   string
+	ConnectionString string
 }
 
-// RateLimitConfig holds rate limiting configuration
+// RateLimitConfig holds rate limiter configuration
 type RateLimitConfig struct {
 	RPS   int
 	Burst int
@@ -53,71 +47,89 @@ type CORSConfig struct {
 	AllowedOrigins []string
 }
 
-// LogConfig holds logging configuration
-type LogConfig struct {
-	Level  string
-	Format string
-}
-
-// Load loads configuration from environment variables
+// Load loads configuration from environment variables using Viper
 func Load() *Config {
+	// Set up Viper
+	viper.SetConfigFile(".env")
+	viper.SetConfigType("env")
+	viper.AutomaticEnv()
+
+	// Read .env file (optional - environment variables take precedence)
+	if err := viper.ReadInConfig(); err != nil {
+		log.Println("No .env file found, using environment variables")
+	}
+
+	// Set defaults
+	setDefaults()
+
 	return &Config{
 		App: AppConfig{
-			Env:     getEnv("APP_ENV", "development"),
-			Port:    getEnv("APP_PORT", "8080"),
-			Name:    getEnv("APP_NAME", "POS API"),
-			Version: getEnv("APP_VERSION", "1.0.0"),
+			Env:     viper.GetString("APP_ENV"),
+			Port:    viper.GetString("APP_PORT"),
+			Name:    viper.GetString("APP_NAME"),
+			Version: viper.GetString("APP_VERSION"),
 		},
 		JWT: JWTConfig{
-			Secret:             getEnv("JWT_SECRET", "default-secret-change-me"),
-			ExpiryHours:        time.Duration(getEnvInt("JWT_EXPIRY_HOURS", 24)) * time.Hour,
-			RefreshExpiryHours: time.Duration(getEnvInt("JWT_REFRESH_EXPIRY_HOURS", 168)) * time.Hour,
+			Secret:             viper.GetString("JWT_SECRET"),
+			ExpiryHours:        viper.GetInt("JWT_EXPIRY_HOURS"),
+			RefreshExpiryHours: viper.GetInt("JWT_REFRESH_EXPIRY_HOURS"),
 		},
 		Database: DatabaseConfig{
-			Driver:       getEnv("DB_DRIVER", "sqlite3"),
-			Path:         getEnv("DB_PATH", "./data/pos.db"),
-			D1DatabaseID: getEnv("D1_DATABASE_ID", ""),
-			D1AccountID:  getEnv("D1_ACCOUNT_ID", ""),
-			D1APIToken:   getEnv("D1_API_TOKEN", ""),
+			ConnectionString: viper.GetString("DB_CONN"),
 		},
 		RateLimit: RateLimitConfig{
-			RPS:   getEnvInt("RATE_LIMIT_RPS", 100),
-			Burst: getEnvInt("RATE_LIMIT_BURST", 200),
+			RPS:   viper.GetInt("RATE_LIMIT_RPS"),
+			Burst: viper.GetInt("RATE_LIMIT_BURST"),
 		},
 		CORS: CORSConfig{
-			AllowedOrigins: strings.Split(getEnv("CORS_ALLOWED_ORIGINS", "http://localhost:3000"), ","),
-		},
-		Log: LogConfig{
-			Level:  getEnv("LOG_LEVEL", "debug"),
-			Format: getEnv("LOG_FORMAT", "json"),
+			AllowedOrigins: parseOrigins(viper.GetString("CORS_ALLOWED_ORIGINS")),
 		},
 	}
 }
 
-// getEnv gets an environment variable with a default value
-func getEnv(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
+// setDefaults sets default configuration values
+func setDefaults() {
+	// Application defaults
+	viper.SetDefault("APP_ENV", "development")
+	viper.SetDefault("APP_PORT", "8080")
+	viper.SetDefault("APP_NAME", "GoPOS API")
+	viper.SetDefault("APP_VERSION", "2.0.0")
+
+	// JWT defaults
+	viper.SetDefault("JWT_SECRET", "change-this-secret-in-production")
+	viper.SetDefault("JWT_EXPIRY_HOURS", 24)
+	viper.SetDefault("JWT_REFRESH_EXPIRY_HOURS", 168) // 7 days
+
+	// Rate limiter defaults
+	viper.SetDefault("RATE_LIMIT_RPS", 100)
+	viper.SetDefault("RATE_LIMIT_BURST", 200)
+
+	// CORS defaults
+	viper.SetDefault("CORS_ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:5173")
 }
 
-// getEnvInt gets an environment variable as an integer with a default value
-func getEnvInt(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
+// parseOrigins parses comma-separated origins string into slice
+func parseOrigins(origins string) []string {
+	if origins == "" {
+		return []string{"http://localhost:3000"}
+	}
+	parts := strings.Split(origins, ",")
+	result := make([]string, 0, len(parts))
+	for _, origin := range parts {
+		origin = strings.TrimSpace(origin)
+		if origin != "" {
+			result = append(result, origin)
 		}
 	}
-	return defaultValue
+	return result
 }
 
-// IsDevelopment returns true if the app is running in development mode
-func (c *Config) IsDevelopment() bool {
-	return c.App.Env == "development"
-}
-
-// IsProduction returns true if the app is running in production mode
+// IsProduction returns true if running in production environment
 func (c *Config) IsProduction() bool {
 	return c.App.Env == "production"
+}
+
+// IsDevelopment returns true if running in development environment
+func (c *Config) IsDevelopment() bool {
+	return c.App.Env == "development"
 }
