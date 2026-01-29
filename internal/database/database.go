@@ -11,7 +11,7 @@ import (
 	"time"
 
 	"github.com/ilramdhan/pos-api/internal/config"
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 // Database wraps the sql.DB connection for PostgreSQL (Supabase)
@@ -25,12 +25,13 @@ func New(cfg *config.DatabaseConfig) (*Database, error) {
 		return nil, fmt.Errorf("DB_CONN is required for PostgreSQL/Supabase connection")
 	}
 
-	log.Println("Connecting to PostgreSQL/Supabase database...")
+	log.Println("Connecting to PostgreSQL/Supabase database using pgx driver...")
 	// Log connection string with password redacted for debugging
 	redactedConn := redactPassword(cfg.ConnectionString)
 	log.Printf("Connection string: %s", redactedConn)
 
-	db, err := sql.Open("postgres", cfg.ConnectionString)
+	// Use "pgx" driver instead of "postgres" (lib/pq)
+	db, err := sql.Open("pgx", cfg.ConnectionString)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open PostgreSQL database: %w", err)
 	}
