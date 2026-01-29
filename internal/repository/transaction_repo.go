@@ -31,7 +31,7 @@ func (r *transactionRepository) Create(ctx context.Context, transaction *models.
 	query := `
 		INSERT INTO transactions (id, user_id, customer_id, invoice_number, subtotal, tax_amount, 
 		                         discount_amount, total_amount, payment_method, status, notes, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
 	`
 	_, err = tx.ExecContext(ctx, query,
 		transaction.ID, transaction.UserID, transaction.CustomerID, transaction.InvoiceNumber,
@@ -46,7 +46,7 @@ func (r *transactionRepository) Create(ctx context.Context, transaction *models.
 	// Insert transaction items
 	itemQuery := `
 		INSERT INTO transaction_items (id, transaction_id, product_id, product_name, unit_price, quantity, subtotal, created_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	`
 	for _, item := range transaction.Items {
 		_, err = tx.ExecContext(ctx, itemQuery,
@@ -68,7 +68,7 @@ func (r *transactionRepository) GetByID(ctx context.Context, id string) (*models
 		       u.id, u.email, u.name, u.role, u.is_active
 		FROM transactions t
 		LEFT JOIN users u ON t.user_id = u.id
-		WHERE t.id = ?
+		WHERE t.id = $1
 	`
 
 	transaction := &models.Transaction{}
@@ -97,7 +97,7 @@ func (r *transactionRepository) GetByID(ctx context.Context, id string) (*models
 	// Get transaction items
 	itemQuery := `
 		SELECT id, transaction_id, product_id, product_name, unit_price, quantity, subtotal, created_at
-		FROM transaction_items WHERE transaction_id = ?
+		FROM transaction_items WHERE transaction_id = $1
 	`
 	rows, err := r.db.QueryContext(ctx, itemQuery, id)
 	if err != nil {
@@ -123,7 +123,7 @@ func (r *transactionRepository) GetByInvoiceNumber(ctx context.Context, invoiceN
 	query := `
 		SELECT id, user_id, customer_id, invoice_number, subtotal, tax_amount,
 		       discount_amount, total_amount, payment_method, status, notes, created_at, updated_at
-		FROM transactions WHERE invoice_number = ?
+		FROM transactions WHERE invoice_number = $1
 	`
 	transaction := &models.Transaction{}
 	var customerID sql.NullString
@@ -144,7 +144,7 @@ func (r *transactionRepository) GetByInvoiceNumber(ctx context.Context, invoiceN
 }
 
 func (r *transactionRepository) UpdateStatus(ctx context.Context, id string, status string) error {
-	query := `UPDATE transactions SET status = ? WHERE id = ?`
+	query := `UPDATE transactions SET status = $1 WHERE id = $2`
 	_, err := r.db.ExecContext(ctx, query, status, id)
 	return err
 }
@@ -152,30 +152,37 @@ func (r *transactionRepository) UpdateStatus(ctx context.Context, id string, sta
 func (r *transactionRepository) List(ctx context.Context, filter dto.TransactionListFilter, pagination utils.Pagination) ([]*models.Transaction, int, error) {
 	var conditions []string
 	var args []interface{}
+	argIndex := 1
 
 	if filter.UserID != "" {
-		conditions = append(conditions, "t.user_id = ?")
+		conditions = append(conditions, fmt.Sprintf("t.user_id = $%d", argIndex))
 		args = append(args, filter.UserID)
+		argIndex++
 	}
 	if filter.CustomerID != "" {
-		conditions = append(conditions, "t.customer_id = ?")
+		conditions = append(conditions, fmt.Sprintf("t.customer_id = $%d", argIndex))
 		args = append(args, filter.CustomerID)
+		argIndex++
 	}
 	if filter.Status != "" {
-		conditions = append(conditions, "t.status = ?")
+		conditions = append(conditions, fmt.Sprintf("t.status = $%d", argIndex))
 		args = append(args, filter.Status)
+		argIndex++
 	}
 	if filter.PaymentMethod != "" {
-		conditions = append(conditions, "t.payment_method = ?")
+		conditions = append(conditions, fmt.Sprintf("t.payment_method = $%d", argIndex))
 		args = append(args, filter.PaymentMethod)
+		argIndex++
 	}
 	if filter.DateFrom != "" {
-		conditions = append(conditions, "DATE(t.created_at) >= ?")
+		conditions = append(conditions, fmt.Sprintf("DATE(t.created_at) >= $%d", argIndex))
 		args = append(args, filter.DateFrom)
+		argIndex++
 	}
 	if filter.DateTo != "" {
-		conditions = append(conditions, "DATE(t.created_at) <= ?")
+		conditions = append(conditions, fmt.Sprintf("DATE(t.created_at) <= $%d", argIndex))
 		args = append(args, filter.DateTo)
+		argIndex++
 	}
 
 	whereClause := ""
@@ -197,8 +204,8 @@ func (r *transactionRepository) List(ctx context.Context, filter dto.Transaction
 		FROM transactions t
 		%s
 		ORDER BY t.%s
-		LIMIT ? OFFSET ?
-	`, whereClause, pagination.OrderBy())
+		LIMIT $%d OFFSET $%d
+	`, whereClause, pagination.OrderBy(), argIndex, argIndex+1)
 
 	args = append(args, pagination.Limit(), pagination.Offset())
 	rows, err := r.db.QueryContext(ctx, query, args...)
@@ -237,7 +244,7 @@ func (r *transactionRepository) GetDailySales(ctx context.Context, dateFrom, dat
 		FROM transactions t
 		LEFT JOIN transaction_items ti ON t.id = ti.transaction_id
 		WHERE t.status = 'completed'
-		  AND DATE(t.created_at) >= ? AND DATE(t.created_at) <= ?
+		  AND DATE(t.created_at) >= $1 AND DATE(t.created_at) <= $2
 		GROUP BY DATE(t.created_at)
 		ORDER BY date DESC
 	`
@@ -266,15 +273,15 @@ func (r *transactionRepository) GetDailySales(ctx context.Context, dateFrom, dat
 
 func (r *transactionRepository) GetMonthlySales(ctx context.Context, dateFrom, dateTo string) ([]dto.MonthlySalesReport, error) {
 	query := `
-		SELECT strftime('%Y-%m', t.created_at) as month,
+		SELECT TO_CHAR(t.created_at, 'YYYY-MM') as month,
 		       COUNT(*) as total_transactions,
 		       SUM(t.total_amount) as total_amount,
 		       SUM(ti.quantity) as total_items
 		FROM transactions t
 		LEFT JOIN transaction_items ti ON t.id = ti.transaction_id
 		WHERE t.status = 'completed'
-		  AND DATE(t.created_at) >= ? AND DATE(t.created_at) <= ?
-		GROUP BY strftime('%Y-%m', t.created_at)
+		  AND DATE(t.created_at) >= $1 AND DATE(t.created_at) <= $2
+		GROUP BY TO_CHAR(t.created_at, 'YYYY-MM')
 		ORDER BY month DESC
 	`
 
@@ -309,10 +316,10 @@ func (r *transactionRepository) GetTopProducts(ctx context.Context, limit int, d
 		JOIN transactions t ON ti.transaction_id = t.id
 		LEFT JOIN products p ON ti.product_id = p.id
 		WHERE t.status = 'completed'
-		  AND DATE(t.created_at) >= ? AND DATE(t.created_at) <= ?
+		  AND DATE(t.created_at) >= $1 AND DATE(t.created_at) <= $2
 		GROUP BY ti.product_id, ti.product_name, p.sku
 		ORDER BY total_sold DESC
-		LIMIT ?
+		LIMIT $3
 	`
 
 	rows, err := r.db.QueryContext(ctx, query, dateFrom, dateTo, limit)

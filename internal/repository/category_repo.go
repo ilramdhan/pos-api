@@ -20,7 +20,7 @@ func NewCategoryRepository(db *sql.DB) CategoryRepository {
 func (r *categoryRepository) Create(ctx context.Context, category *models.Category) error {
 	query := `
 		INSERT INTO categories (id, name, description, slug, is_active, created_at, updated_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		category.ID, category.Name, category.Description, category.Slug,
@@ -32,7 +32,7 @@ func (r *categoryRepository) Create(ctx context.Context, category *models.Catego
 func (r *categoryRepository) GetByID(ctx context.Context, id string) (*models.Category, error) {
 	query := `
 		SELECT id, name, description, slug, is_active, created_at, updated_at
-		FROM categories WHERE id = ?
+		FROM categories WHERE id = $1
 	`
 	category := &models.Category{}
 	err := r.db.QueryRowContext(ctx, query, id).Scan(
@@ -48,7 +48,7 @@ func (r *categoryRepository) GetByID(ctx context.Context, id string) (*models.Ca
 func (r *categoryRepository) GetBySlug(ctx context.Context, slug string) (*models.Category, error) {
 	query := `
 		SELECT id, name, description, slug, is_active, created_at, updated_at
-		FROM categories WHERE slug = ?
+		FROM categories WHERE slug = $1
 	`
 	category := &models.Category{}
 	err := r.db.QueryRowContext(ctx, query, slug).Scan(
@@ -63,8 +63,8 @@ func (r *categoryRepository) GetBySlug(ctx context.Context, slug string) (*model
 
 func (r *categoryRepository) Update(ctx context.Context, category *models.Category) error {
 	query := `
-		UPDATE categories SET name = ?, description = ?, slug = ?, is_active = ?, updated_at = ?
-		WHERE id = ?
+		UPDATE categories SET name = $1, description = $2, slug = $3, is_active = $4, updated_at = $5
+		WHERE id = $6
 	`
 	_, err := r.db.ExecContext(ctx, query,
 		category.Name, category.Description, category.Slug, category.IsActive,
@@ -74,7 +74,7 @@ func (r *categoryRepository) Update(ctx context.Context, category *models.Catego
 }
 
 func (r *categoryRepository) Delete(ctx context.Context, id string) error {
-	query := `DELETE FROM categories WHERE id = ?`
+	query := `DELETE FROM categories WHERE id = $1`
 	_, err := r.db.ExecContext(ctx, query, id)
 	return err
 }
@@ -92,7 +92,7 @@ func (r *categoryRepository) List(ctx context.Context, pagination utils.Paginati
 		SELECT id, name, description, slug, is_active, created_at, updated_at
 		FROM categories
 		ORDER BY ` + pagination.OrderBy() + `
-		LIMIT ? OFFSET ?
+		LIMIT $1 OFFSET $2
 	`
 	rows, err := r.db.QueryContext(ctx, query, pagination.Limit(), pagination.Offset())
 	if err != nil {

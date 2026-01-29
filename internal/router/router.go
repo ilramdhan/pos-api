@@ -40,10 +40,14 @@ func New(cfg *config.Config, db *database.Database) *Router {
 	rateLimiter.StartCleanup(5*time.Minute, 10*time.Minute)
 	engine.Use(middleware.RateLimitMiddleware(rateLimiter))
 
-	// JWT Manager
-	jwtManager := utils.NewJWTManager(cfg.JWT.Secret, cfg.JWT.ExpiryHours, cfg.JWT.RefreshExpiryHours)
+	// JWT Manager (convert hours to duration)
+	jwtManager := utils.NewJWTManager(
+		cfg.JWT.Secret,
+		time.Duration(cfg.JWT.ExpiryHours)*time.Hour,
+		time.Duration(cfg.JWT.RefreshExpiryHours)*time.Hour,
+	)
 
-	// Repositories
+	// Repositories (PostgreSQL/Supabase only)
 	userRepo := repository.NewUserRepository(db.DB)
 	categoryRepo := repository.NewCategoryRepository(db.DB)
 	productRepo := repository.NewProductRepository(db.DB)
