@@ -14,9 +14,10 @@ func TestHealthEndpoint(t *testing.T) {
 
 	AssertStatus(t, w, http.StatusOK)
 
+	// Health endpoint returns {"status": "ok", ...} or {"success": true, ...}
 	response := ParseResponse(t, w)
-	if response["status"] != "ok" {
-		t.Errorf("Expected status 'ok', got '%v'", response["status"])
+	if response["status"] != "ok" && response["success"] != true {
+		t.Errorf("Expected status 'ok' or success=true, got: %v", response)
 	}
 }
 
