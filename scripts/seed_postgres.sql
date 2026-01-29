@@ -6,7 +6,7 @@ INSERT INTO users (id, email, password_hash, name, phone, role, is_active, creat
 VALUES (
     'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
     'admin@gopos.local',
-    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', -- Admin123!
+    '$2a$10$ZvsrDTGNLZ5KiGqJtWLqCug8T7GJPnkIRlHix6ECS0FwpXE2d7..2', -- Admin123!
     'Administrator',
     '081234567890',
     'admin',
@@ -20,7 +20,7 @@ INSERT INTO users (id, email, password_hash, name, phone, role, is_active, creat
 VALUES (
     'b2c3d4e5-f678-90ab-cdef-123456789012',
     'manager@gopos.local',
-    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', -- Manager123!
+    '$2a$10$oEgvZnGBHfuDiUN6Vq2zdOISOKNpk6jNOjJTM9bpX5HUbTxldVqiO', -- Manager123!
     'Store Manager',
     '081234567891',
     'manager',
@@ -34,7 +34,7 @@ INSERT INTO users (id, email, password_hash, name, phone, role, is_active, creat
 VALUES (
     'c3d4e5f6-7890-abcd-ef12-345678901234',
     'cashier@gopos.local',
-    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', -- Cashier123!
+    '$2a$10$/tOYhYjQrLhe/eTAhmc7wuHTat/ltvF/6pZEEuLxfhXAZ4d7o70oq', -- Cashier123!
     'Cashier Staff',
     '081234567892',
     'cashier',
