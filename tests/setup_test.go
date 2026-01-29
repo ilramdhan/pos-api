@@ -49,22 +49,30 @@ type TestEnv struct {
 func SetupTestEnv(t *testing.T) *TestEnv {
 	t.Helper()
 
-	// Use environment variable for test database
-	dbConn := os.Getenv("TEST_DB_CONN")
-	if dbConn == "" {
-		// Default to local PostgreSQL for testing
-		dbConn = "postgres://postgres:postgres@localhost:5432/pos_test?sslmode=disable"
+	// Change to project root so Viper can find .env
+	if err := os.Chdir(".."); err != nil {
+		// Already at project root or can't change - continue anyway
 	}
 
-	os.Setenv("DB_CONN", dbConn)
-	os.Setenv("JWT_SECRET", "test-secret-key-for-testing")
+	// Load .env file first using Viper
+	cfg := config.Load()
+
+	// Use TEST_DB_CONN if set, otherwise fall back to DB_CONN from .env
+	dbConn := os.Getenv("TEST_DB_CONN")
+	if dbConn == "" {
+		dbConn = cfg.Database.ConnectionString
+	}
+
+	if dbConn == "" {
+		t.Fatal("No database connection string found. Set TEST_DB_CONN or DB_CONN in .env")
+	}
+
+	os.Setenv("JWT_SECRET", cfg.JWT.Secret)
 	os.Setenv("APP_ENV", "test")
 	os.Setenv("CORS_ALLOWED_ORIGINS", "http://localhost:3000")
 
-	cfg := config.Load()
-
 	// Connect to PostgreSQL test database
-	db, err := sql.Open("postgres", cfg.Database.ConnectionString)
+	db, err := sql.Open("postgres", dbConn)
 	if err != nil {
 		t.Fatalf("Failed to connect to test database: %v", err)
 	}

@@ -62,10 +62,13 @@ func Load() *Config {
 	// Set defaults
 	setDefaults()
 
+	// Get database connection string with fallback support for Zeabur
+	dbConn := getDBConnectionString()
+
 	return &Config{
 		App: AppConfig{
 			Env:     viper.GetString("APP_ENV"),
-			Port:    viper.GetString("APP_PORT"),
+			Port:    getPort(),
 			Name:    viper.GetString("APP_NAME"),
 			Version: viper.GetString("APP_VERSION"),
 		},
@@ -75,7 +78,7 @@ func Load() *Config {
 			RefreshExpiryHours: viper.GetInt("JWT_REFRESH_EXPIRY_HOURS"),
 		},
 		Database: DatabaseConfig{
-			ConnectionString: viper.GetString("DB_CONN"),
+			ConnectionString: dbConn,
 		},
 		RateLimit: RateLimitConfig{
 			RPS:   viper.GetInt("RATE_LIMIT_RPS"),
@@ -85,6 +88,61 @@ func Load() *Config {
 			AllowedOrigins: parseOrigins(viper.GetString("CORS_ALLOWED_ORIGINS")),
 		},
 	}
+}
+
+// getDBConnectionString gets the database connection string with fallback support
+// Priority: DB_CONN > POSTGRES_URI > POSTGRES_CONNECTION_STRING > construct from components
+func getDBConnectionString() string {
+	// Primary: DB_CONN (Supabase direct)
+	if conn := viper.GetString("DB_CONN"); conn != "" {
+		return conn
+	}
+
+	// Zeabur auto-generated: POSTGRES_URI
+	if uri := viper.GetString("POSTGRES_URI"); uri != "" {
+		return uri
+	}
+
+	// Zeabur auto-generated: POSTGRES_CONNECTION_STRING
+	if connStr := viper.GetString("POSTGRES_CONNECTION_STRING"); connStr != "" {
+		return connStr
+	}
+
+	// Fallback: Construct from Zeabur components
+	host := viper.GetString("POSTGRES_HOST")
+	if host == "" {
+		host = viper.GetString("POSTGRESQL_HOST")
+	}
+
+	if host != "" {
+		port := viper.GetString("POSTGRES_PORT")
+		if port == "" {
+			port = "5432"
+		}
+		user := viper.GetString("POSTGRES_USERNAME")
+		if user == "" {
+			user = "postgres"
+		}
+		password := viper.GetString("POSTGRES_PASSWORD")
+		database := viper.GetString("POSTGRES_DATABASE")
+		if database == "" {
+			database = "postgres"
+		}
+
+		return "postgres://" + user + ":" + password + "@" + host + ":" + port + "/" + database + "?sslmode=require"
+	}
+
+	log.Println("WARNING: No database connection string found")
+	return ""
+}
+
+// getPort gets port with fallback support for Zeabur
+func getPort() string {
+	// Zeabur uses PORT
+	if port := viper.GetString("PORT"); port != "" {
+		return port
+	}
+	return viper.GetString("APP_PORT")
 }
 
 // setDefaults sets default configuration values
