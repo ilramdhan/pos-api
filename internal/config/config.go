@@ -106,22 +106,7 @@ func getDBConnectionString() string {
 		conn = c
 	}
 
-	// 2. If found, optimize SSL settings for Supabase
-	if conn != "" {
-		// Supabase Transaction Pooler (port 6543) often has SSL handshake issues with Go lib/pq.
-		// If connecting to pooler, disable SSL mode to prevent EOF errors and stuck deployments.
-		if strings.Contains(conn, ":6543") && !strings.Contains(conn, "sslmode=") {
-			if strings.Contains(conn, "?") {
-				conn += "&sslmode=disable"
-			} else {
-				conn += "?sslmode=disable"
-			}
-			log.Println("Detected Supabase Pooler (port 6543), appending sslmode=disable to prevent handshake errors")
-		}
-		return conn
-	}
-
-	// 3. Fallback: Construct from Zeabur/standard components
+	// 2. Fallback: Construct from Zeabur/standard components
 	host := viper.GetString("POSTGRES_HOST")
 	if host == "" {
 		host = viper.GetString("POSTGRESQL_HOST")
@@ -142,13 +127,8 @@ func getDBConnectionString() string {
 			database = "postgres"
 		}
 
-		// For direct connection (5432), require SSL. For pooler (6543), disable it.
-		sslMode := "require"
-		if port == "6543" {
-			sslMode = "disable"
-		}
-
-		return "postgres://" + user + ":" + password + "@" + host + ":" + port + "/" + database + "?sslmode=" + sslMode
+		// Default to sslmode=require for security
+		return "postgres://" + user + ":" + password + "@" + host + ":" + port + "/" + database + "?sslmode=require"
 	}
 
 	log.Println("WARNING: No database connection string found")
