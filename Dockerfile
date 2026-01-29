@@ -1,5 +1,5 @@
-# Build stage - using Go 1.23 for compatibility with go.mod
-FROM golang:1.23-bookworm AS builder
+# Build stage - using Go 1.24 for compatibility with go.mod (pgx requires updated toolchain)
+FROM golang:1.24-bookworm AS builder
 
 WORKDIR /app
 
