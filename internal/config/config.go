@@ -92,23 +92,36 @@ func Load() *Config {
 
 // getDBConnectionString gets the database connection string with fallback support
 // Priority: DB_CONN > POSTGRES_URI > POSTGRES_CONNECTION_STRING > construct from components
+// getDBConnectionString gets the database connection string with fallback support
+// Priority: DB_CONN > POSTGRES_URI > POSTGRES_CONNECTION_STRING > construct from components
 func getDBConnectionString() string {
-	// Primary: DB_CONN (Supabase direct)
-	if conn := viper.GetString("DB_CONN"); conn != "" {
+	var conn string
+
+	// 1. Try environment variables in order
+	if c := viper.GetString("DB_CONN"); c != "" {
+		conn = c
+	} else if c := viper.GetString("POSTGRES_URI"); c != "" {
+		conn = c
+	} else if c := viper.GetString("POSTGRES_CONNECTION_STRING"); c != "" {
+		conn = c
+	}
+
+	// 2. If found, optimize SSL settings for Supabase
+	if conn != "" {
+		// Supabase Transaction Pooler (port 6543) often has SSL handshake issues with Go lib/pq.
+		// If connecting to pooler, disable SSL mode to prevent EOF errors and stuck deployments.
+		if strings.Contains(conn, ":6543") && !strings.Contains(conn, "sslmode=") {
+			if strings.Contains(conn, "?") {
+				conn += "&sslmode=disable"
+			} else {
+				conn += "?sslmode=disable"
+			}
+			log.Println("Detected Supabase Pooler (port 6543), appending sslmode=disable to prevent handshake errors")
+		}
 		return conn
 	}
 
-	// Zeabur auto-generated: POSTGRES_URI
-	if uri := viper.GetString("POSTGRES_URI"); uri != "" {
-		return uri
-	}
-
-	// Zeabur auto-generated: POSTGRES_CONNECTION_STRING
-	if connStr := viper.GetString("POSTGRES_CONNECTION_STRING"); connStr != "" {
-		return connStr
-	}
-
-	// Fallback: Construct from Zeabur components
+	// 3. Fallback: Construct from Zeabur/standard components
 	host := viper.GetString("POSTGRES_HOST")
 	if host == "" {
 		host = viper.GetString("POSTGRESQL_HOST")
@@ -129,7 +142,13 @@ func getDBConnectionString() string {
 			database = "postgres"
 		}
 
-		return "postgres://" + user + ":" + password + "@" + host + ":" + port + "/" + database + "?sslmode=require"
+		// For direct connection (5432), require SSL. For pooler (6543), disable it.
+		sslMode := "require"
+		if port == "6543" {
+			sslMode = "disable"
+		}
+
+		return "postgres://" + user + ":" + password + "@" + host + ":" + port + "/" + database + "?sslmode=" + sslMode
 	}
 
 	log.Println("WARNING: No database connection string found")
